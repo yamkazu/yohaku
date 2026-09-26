@@ -1,0 +1,16 @@
+node_modules/
+dist/
+target/
+.env
+.env.*
+*.log
+.DS_Store
+web/dist/
+api/target/
+tools/dynamodb-local/DynamoDBLocal.jar
+tools/dynamodb-local/DynamoDBLocal_lib/
+tools/dynamodb-local/*.txt
+tools/dynamodb-local/*.tar.gz
+shared-local-instance.db
+*.db
+.vite/

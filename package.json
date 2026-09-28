@@ -6,6 +6,6 @@
     "dev:api": "bash scripts/dev-api.sh",
     "dev:ddb": "bash scripts/start-dynamodb.sh",
     "build:web": "npm --prefix web run build",
-    "build:api": "cargo build --manifest-path api/Cargo.toml --release"
+    "build:api": "cargo build --manifest-path api/Cargo.toml --release --locked"
   }
 }

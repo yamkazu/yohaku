@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { Article } from '../lib/api'
 import { formatDate } from '../lib/api'
+import { coverToneStyle } from '../lib/coverTone'
 
 export function ArticleRow({ article, index }: { article: Article; index: number }) {
   return (
@@ -35,7 +36,8 @@ export function ArticleRow({ article, index }: { article: Article; index: number
           </div>
         </div>
         <div
-          className={`h-28 overflow-hidden rounded-sm bg-gradient-to-br sm:h-24 ${article.cover_tone}`}
+          className="h-28 overflow-hidden rounded-sm sm:h-24"
+          style={coverToneStyle(article.cover_tone)}
           aria-hidden
         />
       </Link>

@@ -13,7 +13,7 @@ note の静けさに寄せた、技術記事の読みもの。第1スライス�
 ## 必要環境
 
 - Node.js 20+
-- Rust (stable)
+- Rust **1.94.1+**（リポジトリ直下の `rust-toolchain.toml` で固定）
 - Java 17+（DynamoDB Local 用）
 
 ## 起動
@@ -46,10 +46,13 @@ curl http://127.0.0.1:3848/articles/whitespace-as-product-design
 | 変数 | 既定 |
 |---|---|
 | `PORT` | `3848` |
-| `DYNAMODB_ENDPOINT` | `http://127.0.0.1:8000` |
+| `DYNAMODB_ENDPOINT` | 未設定時は AWS 既定エンドポイント（`npm run dev:api` は Local 用に `http://127.0.0.1:8000` をセット） |
+| `AWS_ENDPOINT_URL_DYNAMODB` | `DYNAMODB_ENDPOINT` の代替（明示時のみ使用） |
 | `YOHAKU_TABLE` | `yohaku` |
 | `AWS_REGION` | `us-east-1` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Local 用に `local` |
+
+`cover_tone` は有限トークン（`mist` / `slate` / `sage`）。Web 側でグラデーション色にマップする。
 
 Web は `VITE_API_URL`（既定 `http://127.0.0.1:3848`）。
 

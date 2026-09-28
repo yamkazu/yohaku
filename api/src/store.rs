@@ -29,17 +29,21 @@ impl DynamoStore {
 
         let shared = loader.load().await;
 
+        // Only override endpoint for explicit local/dev wiring. Omit for real AWS
+        // (Lambda/ECS with IAM). Do not fall through to process-wide AWS_ENDPOINT_URL.
         let endpoint = env::var("DYNAMODB_ENDPOINT")
             .or_else(|_| env::var("AWS_ENDPOINT_URL_DYNAMODB"))
-            .or_else(|_| env::var("AWS_ENDPOINT_URL"))
-            .unwrap_or_else(|_| "http://127.0.0.1:8000".into());
+            .ok();
 
-        let conf = aws_sdk_dynamodb::config::Builder::from(&shared)
-            .endpoint_url(&endpoint)
-            .build();
-        let client = Client::from_conf(conf);
+        let mut conf = aws_sdk_dynamodb::config::Builder::from(&shared);
+        if let Some(ref endpoint) = endpoint {
+            conf = conf.endpoint_url(endpoint);
+            tracing::info!(%table, %endpoint, "connected to DynamoDB");
+        } else {
+            tracing::info!(%table, "connected to DynamoDB (default AWS endpoint)");
+        }
+        let client = Client::from_conf(conf.build());
 
-        tracing::info!(%table, %endpoint, "connected to DynamoDB");
         Ok(Self { client, table })
     }
 
@@ -211,7 +215,10 @@ fn article_item(article: &Article) -> HashMap<String, AttributeValue> {
         "comments".into(),
         AttributeValue::N(article.comments.to_string()),
     );
-    item.insert("tags".into(), AttributeValue::Ss(article.tags.clone()));
+    // DynamoDB rejects empty string sets (ValidationException).
+    if !article.tags.is_empty() {
+        item.insert("tags".into(), AttributeValue::Ss(article.tags.clone()));
+    }
     item.insert(
         "author_id".into(),
         AttributeValue::S(article.author.id.clone()),

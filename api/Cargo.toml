@@ -2,6 +2,7 @@
 name = "yohaku-api"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.94.1"
 description = "余白 API — Axum on AWS Lambda Web Adapter + DynamoDB"
 
 [dependencies]

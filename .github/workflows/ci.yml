@@ -44,8 +44,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Channel + components from repo rust-toolchain.toml (1.94.1, rustfmt, clippy)
+      # Match rust-toolchain.toml (1.94.1 + rustfmt/clippy); toolchain input is required
       - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94.1"
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:

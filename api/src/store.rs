@@ -190,7 +190,10 @@ fn key(name: &str, ty: KeyType) -> AppResult<KeySchemaElement> {
 
 fn article_item(article: &Article) -> HashMap<String, AttributeValue> {
     let mut item = HashMap::new();
-    item.insert("pk".into(), AttributeValue::S(format!("ARTICLE#{}", article.id)));
+    item.insert(
+        "pk".into(),
+        AttributeValue::S(format!("ARTICLE#{}", article.id)),
+    );
     item.insert("sk".into(), AttributeValue::S("META".into()));
     item.insert("entity".into(), AttributeValue::S("ARTICLE".into()));
     item.insert("id".into(), AttributeValue::S(article.id.clone()));

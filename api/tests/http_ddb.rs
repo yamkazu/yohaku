@@ -88,7 +88,13 @@ async fn json_get(path: &str) -> (StatusCode, Value) {
 
 #[tokio::test]
 async fn health_ok() {
-    let (status, json) = json_get("/health").await;
+    // Arrange
+    let path = "/health";
+
+    // Act
+    let (status, json) = json_get(path).await;
+
+    // Assert
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["status"], "ok");
     assert_eq!(json["service"], "yohaku-api");
@@ -97,7 +103,13 @@ async fn health_ok() {
 
 #[tokio::test]
 async fn list_articles_returns_seeded_rows() {
-    let (status, json) = json_get("/articles").await;
+    // Arrange
+    let path = "/articles";
+
+    // Act
+    let (status, json) = json_get(path).await;
+
+    // Assert
     assert_eq!(status, StatusCode::OK);
     let articles = json.as_array().expect("array");
     assert!(
@@ -112,7 +124,13 @@ async fn list_articles_returns_seeded_rows() {
 
 #[tokio::test]
 async fn get_known_slug_returns_article() {
-    let (status, json) = json_get("/articles/quiet-apis").await;
+    // Arrange
+    let path = "/articles/quiet-apis";
+
+    // Act
+    let (status, json) = json_get(path).await;
+
+    // Assert
     assert_eq!(status, StatusCode::OK);
     let article: Article = serde_json::from_value(json).expect("article");
     assert_eq!(article.slug, "quiet-apis");
@@ -123,7 +141,13 @@ async fn get_known_slug_returns_article() {
 
 #[tokio::test]
 async fn unknown_slug_returns_404() {
-    let (status, json) = json_get("/articles/does-not-exist-slug").await;
+    // Arrange
+    let path = "/articles/does-not-exist-slug";
+
+    // Act
+    let (status, json) = json_get(path).await;
+
+    // Assert
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json["error"], "not found");
 }

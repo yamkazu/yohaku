@@ -93,22 +93,32 @@ mod tests {
 
     #[test]
     fn sample_cover_tones_are_known_tokens() {
-        for article in sample_articles() {
-            assert!(
-                COVER_TONES.contains(&article.cover_tone.as_str()),
-                "unknown cover_tone {:?} on slug {}",
-                article.cover_tone,
-                article.slug
-            );
-        }
+        // Arrange
+        let articles = sample_articles();
+
+        // Act
+        let unknown: Vec<_> = articles
+            .iter()
+            .filter(|a| !COVER_TONES.contains(&a.cover_tone.as_str()))
+            .map(|a| (a.slug.as_str(), a.cover_tone.as_str()))
+            .collect();
+
+        // Assert
+        assert!(
+            unknown.is_empty(),
+            "unknown cover_tone values in seed: {unknown:?}"
+        );
     }
 
     #[test]
     fn sample_articles_include_all_known_cover_tones() {
-        let used: Vec<_> = sample_articles()
-            .into_iter()
-            .map(|a| a.cover_tone)
-            .collect();
+        // Arrange
+        let articles = sample_articles();
+
+        // Act
+        let used: Vec<_> = articles.into_iter().map(|a| a.cover_tone).collect();
+
+        // Assert
         for tone in COVER_TONES {
             assert!(
                 used.iter().any(|t| t == tone),

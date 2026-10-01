@@ -322,7 +322,13 @@ mod tests {
 
     #[test]
     fn empty_tags_omit_string_set_attribute() {
-        let item = article_item(&sample_article(vec![], "mist"));
+        // Arrange
+        let article = sample_article(vec![], "mist");
+
+        // Act
+        let item = article_item(&article);
+
+        // Assert
         assert!(
             !item.contains_key("tags"),
             "DynamoDB rejects empty SS; tags key must be omitted"
@@ -331,7 +337,13 @@ mod tests {
 
     #[test]
     fn non_empty_tags_use_string_set() {
-        let item = article_item(&sample_article(vec!["frontend".into()], "mist"));
+        // Arrange
+        let article = sample_article(vec!["frontend".into()], "mist");
+
+        // Act
+        let item = article_item(&article);
+
+        // Assert
         let tags = item.get("tags").expect("tags present");
         assert!(tags.as_ss().is_ok());
         assert_eq!(tags.as_ss().unwrap(), &vec!["frontend".to_string()]);
@@ -340,7 +352,13 @@ mod tests {
     #[test]
     fn cover_tone_stored_as_string_attribute() {
         for tone in crate::models::COVER_TONES {
-            let item = article_item(&sample_article(vec![], tone));
+            // Arrange
+            let article = sample_article(vec![], tone);
+
+            // Act
+            let item = article_item(&article);
+
+            // Assert
             assert_eq!(
                 item.get("cover_tone")
                     .and_then(|v| v.as_s().ok())
@@ -352,9 +370,14 @@ mod tests {
 
     #[test]
     fn article_roundtrip_preserves_empty_tags_and_cover_tone() {
+        // Arrange
         let original = sample_article(vec![], "sage");
+
+        // Act
         let item = article_item(&original);
         let back = article_from_item(&item).expect("decode");
+
+        // Assert
         assert!(back.tags.is_empty());
         assert_eq!(back.cover_tone, "sage");
         assert_eq!(back.slug, original.slug);

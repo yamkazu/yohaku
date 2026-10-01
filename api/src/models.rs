@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// Finite cover tone tokens accepted by the API contract (mirrors web `COVER_TONES`).
+pub const COVER_TONES: &[&str] = &["mist", "slate", "sage"];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorSummary {
     pub id: String,

@@ -26,3 +26,32 @@ impl IntoResponse for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use serde_json::Value;
+
+    #[tokio::test]
+    async fn not_found_maps_to_404_json() {
+        let response = AppError::NotFound.into_response();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let json: Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(json["error"], "not found");
+    }
+
+    #[tokio::test]
+    async fn other_maps_to_500_without_leaking_details() {
+        let response = AppError::Other(anyhow::anyhow!("secret detail")).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let json: Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(json["error"], "internal error");
+    }
+}

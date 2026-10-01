@@ -19,6 +19,11 @@ pub struct DynamoStore {
 impl DynamoStore {
     pub async fn connect() -> anyhow::Result<Self> {
         let table = env::var("YOHAKU_TABLE").unwrap_or_else(|_| "yohaku".into());
+        Self::connect_with_table(table).await
+    }
+
+    pub async fn connect_with_table(table: impl Into<String>) -> anyhow::Result<Self> {
+        let table = table.into();
 
         let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
         if let Ok(region) = env::var("AWS_REGION").or_else(|_| env::var("AWS_DEFAULT_REGION")) {
@@ -286,4 +291,72 @@ fn n_u64(item: &HashMap<String, AttributeValue>, key: &str) -> AppResult<u64> {
         .and_then(|v| v.as_n().ok())
         .and_then(|n| n.parse().ok())
         .ok_or_else(|| AppError::Other(anyhow::anyhow!("missing number attr {key}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn sample_article(tags: Vec<String>, cover_tone: &str) -> Article {
+        Article {
+            id: "t1".into(),
+            slug: "test-slug".into(),
+            title: "title".into(),
+            excerpt: "excerpt".into(),
+            body: "body".into(),
+            cover_tone: cover_tone.into(),
+            published_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            reading_minutes: 1,
+            likes: 0,
+            comments: 0,
+            tags,
+            author: AuthorSummary {
+                id: "a".into(),
+                name: "n".into(),
+                username: "u".into(),
+                avatar: "AV".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn empty_tags_omit_string_set_attribute() {
+        let item = article_item(&sample_article(vec![], "mist"));
+        assert!(
+            !item.contains_key("tags"),
+            "DynamoDB rejects empty SS; tags key must be omitted"
+        );
+    }
+
+    #[test]
+    fn non_empty_tags_use_string_set() {
+        let item = article_item(&sample_article(vec!["frontend".into()], "mist"));
+        let tags = item.get("tags").expect("tags present");
+        assert!(tags.as_ss().is_ok());
+        assert_eq!(tags.as_ss().unwrap(), &vec!["frontend".to_string()]);
+    }
+
+    #[test]
+    fn cover_tone_stored_as_string_attribute() {
+        for tone in crate::models::COVER_TONES {
+            let item = article_item(&sample_article(vec![], tone));
+            assert_eq!(
+                item.get("cover_tone")
+                    .and_then(|v| v.as_s().ok())
+                    .map(String::as_str),
+                Some(*tone)
+            );
+        }
+    }
+
+    #[test]
+    fn article_roundtrip_preserves_empty_tags_and_cover_tone() {
+        let original = sample_article(vec![], "sage");
+        let item = article_item(&original);
+        let back = article_from_item(&item).expect("decode");
+        assert!(back.tags.is_empty());
+        assert_eq!(back.cover_tone, "sage");
+        assert_eq!(back.slug, original.slug);
+    }
 }

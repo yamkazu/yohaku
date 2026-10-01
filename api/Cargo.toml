@@ -5,6 +5,11 @@ edition = "2021"
 rust-version = "1.94.1"
 description = "余白 API — Axum on AWS Lambda Web Adapter + DynamoDB"
 
+[features]
+default = []
+# DynamoDB Local HTTP integration tests under tests/http_ddb.rs
+integration = []
+
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
@@ -20,3 +25,12 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+
+[[test]]
+name = "http_ddb"
+path = "tests/http_ddb.rs"
+required-features = ["integration"]

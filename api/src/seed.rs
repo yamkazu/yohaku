@@ -20,7 +20,7 @@ fn dt(y: i32, m: u32, d: u32) -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(y, m, d, 9, 0, 0).unwrap()
 }
 
-fn sample_articles() -> Vec<Article> {
+pub fn sample_articles() -> Vec<Article> {
     let aoi = AuthorSummary {
         id: "a1".into(),
         name: "森下 葵".into(),
@@ -84,4 +84,46 @@ fn sample_articles() -> Vec<Article> {
             author: yuki,
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::COVER_TONES;
+
+    #[test]
+    fn sample_cover_tones_are_known_tokens() {
+        // Arrange
+        let articles = sample_articles();
+
+        // Act
+        let unknown: Vec<_> = articles
+            .iter()
+            .filter(|a| !COVER_TONES.contains(&a.cover_tone.as_str()))
+            .map(|a| (a.slug.as_str(), a.cover_tone.as_str()))
+            .collect();
+
+        // Assert
+        assert!(
+            unknown.is_empty(),
+            "unknown cover_tone values in seed: {unknown:?}"
+        );
+    }
+
+    #[test]
+    fn sample_articles_include_all_known_cover_tones() {
+        // Arrange
+        let articles = sample_articles();
+
+        // Act
+        let used: Vec<_> = articles.into_iter().map(|a| a.cover_tone).collect();
+
+        // Assert
+        for tone in COVER_TONES {
+            assert!(
+                used.iter().any(|t| t == tone),
+                "seed data missing cover_tone {tone}"
+            );
+        }
+    }
 }

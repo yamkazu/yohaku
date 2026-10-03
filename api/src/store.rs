@@ -207,10 +207,6 @@ fn article_item(article: &Article) -> HashMap<String, AttributeValue> {
     item.insert("excerpt".into(), AttributeValue::S(article.excerpt.clone()));
     item.insert("body".into(), AttributeValue::S(article.body.clone()));
     item.insert(
-        "cover_tone".into(),
-        AttributeValue::S(article.cover_tone.clone()),
-    );
-    item.insert(
         "published_at".into(),
         AttributeValue::S(article.published_at.to_rfc3339()),
     );
@@ -258,7 +254,6 @@ fn article_from_item(item: &HashMap<String, AttributeValue>) -> AppResult<Articl
         title: s(item, "title")?,
         excerpt: s(item, "excerpt")?,
         body: s(item, "body")?,
-        cover_tone: s(item, "cover_tone")?,
         published_at: DateTime::parse_from_rfc3339(&s(item, "published_at")?)
             .map_err(|e| AppError::Other(e.into()))?
             .with_timezone(&Utc),
@@ -298,14 +293,13 @@ mod tests {
     use super::*;
     use chrono::TimeZone;
 
-    fn sample_article(tags: Vec<String>, cover_tone: &str) -> Article {
+    fn sample_article(tags: Vec<String>) -> Article {
         Article {
             id: "t1".into(),
             slug: "test-slug".into(),
             title: "title".into(),
             excerpt: "excerpt".into(),
             body: "body".into(),
-            cover_tone: cover_tone.into(),
             published_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
             reading_minutes: 1,
             likes: 0,
@@ -323,7 +317,7 @@ mod tests {
     #[test]
     fn empty_tags_omit_string_set_attribute() {
         // Arrange
-        let article = sample_article(vec![], "mist");
+        let article = sample_article(vec![]);
 
         // Act
         let item = article_item(&article);
@@ -338,7 +332,7 @@ mod tests {
     #[test]
     fn non_empty_tags_use_string_set() {
         // Arrange
-        let article = sample_article(vec!["frontend".into()], "mist");
+        let article = sample_article(vec!["frontend".into()]);
 
         // Act
         let item = article_item(&article);
@@ -350,28 +344,24 @@ mod tests {
     }
 
     #[test]
-    fn cover_tone_stored_as_string_attribute() {
-        for tone in crate::models::COVER_TONES {
-            // Arrange
-            let article = sample_article(vec![], tone);
+    fn article_item_omits_cover_tone_attribute() {
+        // Arrange
+        let article = sample_article(vec![]);
 
-            // Act
-            let item = article_item(&article);
+        // Act
+        let item = article_item(&article);
 
-            // Assert
-            assert_eq!(
-                item.get("cover_tone")
-                    .and_then(|v| v.as_s().ok())
-                    .map(String::as_str),
-                Some(*tone)
-            );
-        }
+        // Assert
+        assert!(
+            !item.contains_key("cover_tone"),
+            "cover_tone was removed from the Article contract"
+        );
     }
 
     #[test]
-    fn article_roundtrip_preserves_empty_tags_and_cover_tone() {
+    fn article_roundtrip_preserves_empty_tags_and_slug() {
         // Arrange
-        let original = sample_article(vec![], "sage");
+        let original = sample_article(vec![]);
 
         // Act
         let item = article_item(&original);
@@ -379,7 +369,7 @@ mod tests {
 
         // Assert
         assert!(back.tags.is_empty());
-        assert_eq!(back.cover_tone, "sage");
         assert_eq!(back.slug, original.slug);
+        assert_eq!(back.title, original.title);
     }
 }

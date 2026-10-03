@@ -52,8 +52,6 @@ curl http://127.0.0.1:3848/articles/whitespace-as-product-design
 | `AWS_REGION` | `us-east-1` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Local 用に `local` |
 
-`cover_tone` は有限トークン（`mist` / `slate` / `sage`）。Web 側でグラデーション色にマップする。
-
 Web は `VITE_API_URL`（既定 `http://127.0.0.1:3848`）。
 
 ## 次のスライス（未実装）

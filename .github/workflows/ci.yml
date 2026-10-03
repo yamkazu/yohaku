@@ -146,7 +146,7 @@ jobs:
 
       - name: Build API
         working-directory: api
-        run: cargo build --locked
+        run: cargo build --locked --features integration
 
       - name: Start API
         run: |

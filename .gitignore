@@ -7,6 +7,9 @@ target/
 .DS_Store
 web/dist/
 api/target/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
 tools/dynamodb-local/DynamoDBLocal.jar
 tools/dynamodb-local/DynamoDBLocal_lib/
 tools/dynamodb-local/*.txt

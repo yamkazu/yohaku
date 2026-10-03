@@ -11,7 +11,6 @@ export type Article = {
   title: string
   excerpt: string
   body: string
-  cover_tone: string
   published_at: string
   reading_minutes: number
   likes: number

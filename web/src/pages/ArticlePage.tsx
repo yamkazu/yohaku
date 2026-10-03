@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchArticle, formatDate, type Article } from '../lib/api'
-import { coverToneStyle } from '../lib/coverTone'
 
 export function ArticlePage() {
   const { slug = '' } = useParams()
@@ -60,11 +59,7 @@ export function ArticlePage() {
       </Link>
 
       <header className="animate-rise mt-8">
-        <div
-          className="mb-8 h-40 w-full rounded-sm sm:h-48"
-          style={coverToneStyle(article.cover_tone)}
-          aria-hidden
-        />
+        <div className="article-cover mb-8 h-40 w-full rounded-sm sm:h-48" aria-hidden />
         <h1 className="font-serif text-[1.75rem] leading-snug font-semibold tracking-tight text-ink sm:text-4xl">
           {article.title}
         </h1>

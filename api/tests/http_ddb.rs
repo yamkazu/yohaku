@@ -132,9 +132,12 @@ async fn get_known_slug_returns_article() {
 
     // Assert
     assert_eq!(status, StatusCode::OK);
+    assert!(
+        json.get("cover_tone").is_none(),
+        "cover_tone must not appear in the API response"
+    );
     let article: Article = serde_json::from_value(json).expect("article");
     assert_eq!(article.slug, "quiet-apis");
-    assert_eq!(article.cover_tone, "sage");
     assert!(!article.title.is_empty());
     assert!(!article.body.is_empty());
 }

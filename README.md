@@ -7,7 +7,7 @@ note の静けさに寄せた、技術記事の読みもの。第1スライス�
 | 層 | 技術 |
 |---|---|
 | Web | Vite + React + TypeScript + Tailwind |
-| API | Rust + Axum（Lambda Web Adapter 想定） |
+| API | Rust + Axum（Lambda Web Adapter） |
 | DB | DynamoDB（ローカルは DynamoDB Local） |
 
 ## 必要環境
@@ -54,8 +54,32 @@ curl http://127.0.0.1:3848/articles/whitespace-as-product-design
 
 Web は `VITE_API_URL`（既定 `http://127.0.0.1:3848`）。
 
+## デプロイ
+
+ローカルの一覧と詳細を、CloudFront の 1 つの URL で公開する。ブラウザは `/api/articles` を呼び、CloudFront が `/api` を外してから Lambda に渡す。Axum の経路は `/articles` のまま。記事ページ `/articles/:slug` は静的ファイルのまま。
+
+デプロイには、ローカル開発の環境に加えて次が必要です。
+
+- [cargo-lambda](https://www.cargo-lambda.info/guide/installation.html)
+- zig（`PATH` に入っていること。cargo-lambda が glibc 2.34 向けにクロスコンパイルする）
+- AWS 認証情報（`cdk deploy` のときだけ。`cdk synth` には不要）
+
+```bash
+npm ci --prefix web
+npm ci --prefix infra
+npm run build:web:deploy
+npm run build:lambda
+npm run synth
+```
+
+`npm run synth` がテンプレートを出せば、アカウントがなくても構成は確認できる。アカウントがあるときは、リージョンごとに 1 回 `npm --prefix infra run bootstrap` を実行してから `npm --prefix infra run deploy` を実行する。出力の `SiteUrl` を開く。
+
+初回の API 起動は、テーブルが空ならサンプル記事を 3 件書く。テーブル名は CDK が決める。関数の `YOHAKU_TABLE` にその名前が入る。
+
+`npm run dev:web` と `npm run test:e2e` はこれまでどおり。デプロイ用ビルドだけ `VITE_API_URL=/api` を使う。slug に `.` が含まれると、再読み込みは静的ファイルの要求になり、`index.html` には戻らない。今のサンプル記事の slug には `.` はない。
+
 ## 次のスライス（未実装）
 
 - 著者・タグ
-- CDK デプロイ（Lambda Web Adapter + DynamoDB + 静的配信）
 - 認証・投稿
+- デプロイ後の smoke チェック

@@ -1,0 +1,27 @@
+name: Synth
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synth-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synth:
+    name: cdk synth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-cdk-assets
+
+      - name: Synthesize
+        run: npm run synth
+
+      - name: Check template
+        run: node scripts/check-cdk-template.mjs infra/cdk.out/Yohaku.template.json

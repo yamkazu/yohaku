@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const path = process.argv[2];
 if (!path) {
@@ -14,7 +15,13 @@ const tables = byType("AWS::DynamoDB::Table");
 if (tables.length !== 1) {
   throw new Error(`expected 1 table, got ${tables.length}`);
 }
-const table = tables[0].Properties;
+const tableResource = tables[0];
+if (tableResource.DeletionPolicy !== "Retain" || tableResource.UpdateReplacePolicy !== "Retain") {
+  throw new Error(
+    `table removal ${tableResource.DeletionPolicy}/${tableResource.UpdateReplacePolicy}`,
+  );
+}
+const table = tableResource.Properties;
 const keyNames = table.KeySchema.map((key) => `${key.AttributeName}:${key.KeyType}`).sort();
 if (keyNames.join(",") !== "pk:HASH,sk:RANGE") {
   throw new Error(`table keys ${keyNames.join(",")}`);
@@ -83,6 +90,12 @@ const apiBehavior = behaviors.find((behavior) => behavior.PathPattern === "api/*
 if (!apiBehavior) throw new Error("missing api/* behavior");
 if (apiBehavior.ViewerProtocolPolicy !== "redirect-to-https") {
   throw new Error("api behavior protocol");
+}
+
+const manifest = JSON.parse(readFileSync(join(dirname(path), "manifest.json"), "utf8"));
+const environment = manifest.artifacts?.Yohaku?.environment;
+if (!/^aws:\/\/(?:unknown-account|\d{12})\/ap-northeast-1$/.test(environment ?? "")) {
+  throw new Error(`environment ${environment}`);
 }
 
 console.log("template ok");

@@ -1,0 +1,56 @@
+name: Build CDK assets
+description: Install toolchains and build the web bundle and Lambda bootstrap that cdk synth needs.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: npm
+        cache-dependency-path: |
+          web/package-lock.json
+          infra/package-lock.json
+
+    - name: Install web and infra dependencies
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        npm ci --prefix web
+        npm ci --prefix infra
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "1.94.1"
+
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: api
+
+    - uses: mlugg/setup-zig@v2
+      with:
+        version: "0.14.1"
+
+    - name: Install cargo-lambda
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        version=1.9.2
+        archive="cargo-lambda-v${version}.x86_64-unknown-linux-musl.tar.gz"
+        curl -fsSL -o "$archive" \
+          "https://github.com/cargo-lambda/cargo-lambda/releases/download/v${version}/${archive}"
+        tar -xzf "$archive"
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 cargo-lambda "$HOME/.local/bin/cargo-lambda"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        rm -f "$archive" cargo-lambda
+
+    - name: Build web for deploy
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: npm run build:web:deploy
+
+    - name: Build Lambda
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: npm run build:lambda

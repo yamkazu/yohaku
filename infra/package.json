@@ -5,7 +5,7 @@
   "scripts": {
     "synth": "cdk synth",
     "diff": "cdk diff",
-    "deploy": "cdk deploy",
+    "deploy": "cdk deploy Yohaku --require-approval never",
     "bootstrap": "cdk bootstrap",
     "test": "node --import tsx --test test/viewer.test.ts"
   },

@@ -58,15 +58,15 @@ Web は `VITE_API_URL`（既定 `http://127.0.0.1:3848`）。
 
 ローカルの一覧と詳細を、CloudFront の 1 つの URL で公開する。ブラウザは `/api/articles` を呼び、CloudFront が `/api` を外してから Lambda に渡す。Axum の経路は `/articles` のまま。記事ページ `/articles/:slug` は静的ファイルのまま。リージョンは `ap-northeast-1`、スタック名は `Yohaku`。
 
-プルリクエストは `cdk synth` までです。AWS は変わりません。`main` への push だけがスタックを作るか更新します。デプロイは同時に一つだけです。進行中のデプロイは中断しません。
+プルリクエストは `cdk synth` まで。AWS は変わらない。`main` への push だけがスタックを作るか更新する。デプロイは同時に一つだけ。進行中のデプロイは中断しない。
 
-一度きりの準備は次の 3 つです。コマンドは [docs/deploy.md](docs/deploy.md) にあります。
+一度きりの準備は次の 3 つ。コマンドは [docs/deploy.md](docs/deploy.md) にある。
 
 1. CDK の bootstrap（アカウントと `ap-northeast-1` の組。ワークフローでは実行しない）
 2. GitHub Actions が引き受ける IAM ロール（OpenID Connect の短期セッション）
 3. リポジトリ変数 `AWS_ROLE_ARN` にそのロールの ARN を入れる
 
-AWS のアクセスキーはリポジトリにも GitHub Secrets にも置きません。スタックを削除しても DynamoDB のテーブルは残ります（`RemovalPolicy.RETAIN`）。
+AWS のアクセスキーはリポジトリにも GitHub Secrets にも置かない。スタックを削除しても DynamoDB のテーブルは残る（`RemovalPolicy.RETAIN`）。
 
 ## 次のスライス（未実装）
 

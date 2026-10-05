@@ -1,8 +1,6 @@
 # デプロイ
 
-README の「デプロイ」は公開の形と、いつ AWS が変わるかだけを書いています。ここには、ローカルでの合成と、一度きりの準備のコマンドを置きます。
-
-公開先は CloudFront の 1 つの URL です。ブラウザは `/api/articles` を呼び、CloudFront が `/api` を外してから Lambda に渡します。Axum の経路は `/articles` のままです。記事ページ `/articles/:slug` は静的ファイルのままです。リージョンは `ap-northeast-1`、スタック名は `Yohaku` です。
+何がデプロイされるかは README の「デプロイ」に書いてあります。ここには、ローカルでの合成と、一度きりの準備のコマンドを置きます。
 
 プルリクエストは `cdk synth` までです。AWS は変わりません。`main` への push だけが `npm --prefix infra run deploy` を実行し、スタックを作るか更新します。デプロイは同時に一つだけです。進行中のデプロイは中断しません。ワークフローは bootstrap を実行しません。
 
@@ -105,7 +103,7 @@ aws iam put-role-policy \
 
 ### 3. リポジトリ変数 `AWS_ROLE_ARN`
 
-ロールの ARN をリポジトリ変数に入れます。値はプレースホルダのままにして、`<account-id>` だけを置き換えます。
+ロールの ARN をリポジトリ変数に入れます。ARN の `<account-id>` を自分のアカウント ID に置き換えて実行します。
 
 ```bash
 gh variable set AWS_ROLE_ARN --repo yamkazu/yohaku \

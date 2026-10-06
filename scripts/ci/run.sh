@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Steps shared by GitHub Actions (.github/workflows/ci.yml) and `npm run verify`.
-# Run from anywhere; paths are anchored at the repository root.
+# CI とローカルで共有するステップディスパッチャ。
+# 引数 1 つでステップ名を受け取り、対応するコマンドを実行する。
+#
+# ステップ: web-install, web-lint, web-build, dynamodb, api-fmt, api-clippy,
+# api-build, api-test, api-start, e2e-install, playwright-install, e2e
+#
+# 使い方:
+#   bash scripts/ci/run.sh web-lint
+#   bash scripts/ci/run.sh --help
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

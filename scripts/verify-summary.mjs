@@ -1,3 +1,8 @@
+// `.verify/summary.json` を生成する。
+// 各ステップの成否、失敗時の `failedStep` と `logTail` を出力する。`verify.sh` から呼ばれる。
+//
+// 使い方:
+//   node scripts/verify-summary.mjs <verify-dir> <exit-code>
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 

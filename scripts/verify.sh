@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# One local run of the same checks CI uses, plus the Playwright journey.
-# On failure, .verify/summary.json names the step and keeps its log.
+# `npm run verify` の本体。
+# `run.sh` の全ステップを順に呼び、ログを `.verify/` に残し、終了時に DynamoDB と API を止める。
+#
+# 使い方:
+#   npm run verify
+#   bash scripts/verify.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

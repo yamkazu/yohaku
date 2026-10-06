@@ -135,3 +135,13 @@ jobs:
 
       - name: Run user harness (feed → article)
         run: bash scripts/ci/run.sh e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7

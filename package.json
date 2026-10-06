@@ -10,6 +10,7 @@
     "build:api": "cargo build --manifest-path api/Cargo.toml --release --locked",
     "build:lambda": "bash scripts/build-lambda.sh",
     "synth": "npm --prefix infra run synth",
-    "test:e2e": "npm --prefix e2e test"
+    "test:e2e": "npm --prefix e2e test",
+    "verify": "bash scripts/verify.sh"
   }
 }

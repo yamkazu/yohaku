@@ -8,7 +8,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI
+  reporter: process.env.GITHUB_ACTIONS
     ? [['list'], ['html', { open: 'never' }], ['github']]
     : [['list'], ['html', { open: 'never' }]],
   use: {

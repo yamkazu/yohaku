@@ -14,9 +14,6 @@ jobs:
   web:
     name: Web (lint + build)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
     steps:
       - uses: actions/checkout@v4
 
@@ -27,20 +24,17 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: bash scripts/ci/run.sh web-install
 
       - name: Lint
-        run: npm run lint
+        run: bash scripts/ci/run.sh web-lint
 
       - name: Build
-        run: npm run build
+        run: bash scripts/ci/run.sh web-build
 
   api:
     name: API (fmt + clippy + build + test)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: api
     env:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
@@ -67,31 +61,19 @@ jobs:
           java-version: "21"
 
       - name: Start DynamoDB Local
-        working-directory: .
-        run: |
-          bash scripts/start-dynamodb.sh &
-          echo $! > /tmp/dynamodb-local.pid
-          for i in $(seq 1 60); do
-            if (echo >/dev/tcp/127.0.0.1/${DYNAMODB_PORT}) >/dev/null 2>&1; then
-              echo "DynamoDB Local ready on :${DYNAMODB_PORT}"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "DynamoDB Local failed to start"
-          exit 1
+        run: bash scripts/ci/run.sh dynamodb
 
       - name: Format check
-        run: cargo fmt --check
+        run: bash scripts/ci/run.sh api-fmt
 
       - name: Clippy
-        run: cargo clippy --locked --features integration -- -D warnings
+        run: bash scripts/ci/run.sh api-clippy
 
       - name: Build
-        run: cargo build --locked --features integration
+        run: bash scripts/ci/run.sh api-build
 
       - name: Test (unit + DynamoDB Local integration)
-        run: cargo test --locked --features integration
+        run: bash scripts/ci/run.sh api-test
 
   e2e:
     name: E2E (Playwright user harness)
@@ -131,63 +113,25 @@ jobs:
             e2e/package-lock.json
 
       - name: Start DynamoDB Local
-        run: |
-          bash scripts/start-dynamodb.sh &
-          echo $! > /tmp/dynamodb-local.pid
-          for i in $(seq 1 60); do
-            if (echo >/dev/tcp/127.0.0.1/${DYNAMODB_PORT}) >/dev/null 2>&1; then
-              echo "DynamoDB Local ready on :${DYNAMODB_PORT}"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "DynamoDB Local failed to start"
-          exit 1
+        run: bash scripts/ci/run.sh dynamodb
 
       - name: Build API
-        working-directory: api
-        run: cargo build --locked --features integration
+        run: bash scripts/ci/run.sh api-build
 
       - name: Start API
-        run: |
-          ./api/target/debug/yohaku-api &
-          echo $! > /tmp/yohaku-api.pid
-          for i in $(seq 1 60); do
-            if curl -sf "http://127.0.0.1:${PORT}/health" >/dev/null; then
-              echo "API ready on :${PORT}"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "API failed to start"
-          exit 1
+        run: bash scripts/ci/run.sh api-start
 
       - name: Install web dependencies
-        working-directory: web
-        run: npm ci
+        run: bash scripts/ci/run.sh web-install
 
       - name: Build web
-        working-directory: web
-        run: npm run build
+        run: bash scripts/ci/run.sh web-build
 
       - name: Install e2e dependencies
-        working-directory: e2e
-        run: npm ci
+        run: bash scripts/ci/run.sh e2e-install
 
       - name: Install Playwright Chromium
-        working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/run.sh playwright-install
 
       - name: Run user harness (feed → article)
-        working-directory: e2e
-        run: npm test
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: |
-            e2e/playwright-report
-            e2e/test-results
-          retention-days: 7
+        run: bash scripts/ci/run.sh e2e

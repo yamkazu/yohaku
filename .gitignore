@@ -18,3 +18,4 @@ tools/dynamodb-local/*.tar.gz
 shared-local-instance.db
 *.db
 .vite/
+.verify/

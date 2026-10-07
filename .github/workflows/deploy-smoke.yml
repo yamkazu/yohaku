@@ -1,0 +1,39 @@
+name: Deploy smoke
+
+on:
+  workflow_run:
+    workflows: ["Deploy"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: deploy-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: public surface
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read SiteUrl from the Deploy run
+        id: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          url="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log | bash scripts/deploy-smoke.sh --site-url-from-log)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Check the public surface
+        env:
+          SITE_URL: ${{ steps.site.outputs.url }}
+        run: bash scripts/deploy-smoke.sh

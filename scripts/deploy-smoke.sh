@@ -120,6 +120,7 @@ fetch home "$site/"
 require_status home 200
 require_type home text/html
 grep -F -q '余白 — 技術を、余白とともに' "$tmp/home.body" || fail "home is not the public app"
+# S3 SSE-S3 (BucketEncryption.S3_MANAGED) on static responses, not a browser security header.
 enc="$(header_value "$tmp/home.headers" x-amz-server-side-encryption)"
 [[ "$enc" == "AES256" ]] || fail "home encryption header $enc"
 

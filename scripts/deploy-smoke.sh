@@ -3,8 +3,8 @@ set -euo pipefail
 
 site_url_from_log() {
   local matches urls
-  matches="$(grep -oE 'Yohaku\.SiteUrl = https://[a-z0-9]+\.cloudfront\.net' || true)"
-  urls="$(printf '%s\n' "$matches" | sed -n 's/^Yohaku\.SiteUrl = //p' | sort -u)"
+  matches="$(grep -oE 'Yohaku\.SiteUrl = [^[:space:]]+' || true)"
+  urls="$(printf '%s\n' "$matches" | sed -n 's/^Yohaku\.SiteUrl = //p' | grep -E '^https://[a-z0-9]+\.cloudfront\.net$' | sort -u || true)"
   if [[ -z "$urls" ]]; then
     echo "Deploy log did not publish Yohaku.SiteUrl" >&2
     exit 1

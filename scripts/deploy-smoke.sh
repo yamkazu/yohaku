@@ -27,6 +27,8 @@ if ! [[ "$site" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]]; then
   exit 1
 fi
 host="${site#https://}"
+user_agent="YohakuDeploySmoke/1.0"
+canary_slug="deploy-smoke-canary"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -52,7 +54,7 @@ header_value() {
 
 fetch() {
   local name="$1" url="$2" code
-  code="$(curl -sS --max-redirs 0 --max-time 20 -D "$tmp/$name.headers" -o "$tmp/$name.body" -w '%{http_code}' "$url")" || fail "request $url"
+  code="$(curl -sS -A "$user_agent" --max-redirs 0 --max-time 20 -D "$tmp/$name.headers" -o "$tmp/$name.body" -w '%{http_code}' "$url")" || fail "request $url"
   printf '%s' "$code" >"$tmp/$name.code"
 }
 
@@ -124,7 +126,7 @@ grep -F -q '余白 — 技術を、余白とともに' "$tmp/home.body" || fail 
 enc="$(header_value "$tmp/home.headers" x-amz-server-side-encryption)"
 [[ "$enc" == "AES256" ]] || fail "home encryption header $enc"
 
-require_app_shell article /articles/whitespace-as-product-design
+require_app_shell article "/articles/$canary_slug"
 
 fetch health "$site/api/health"
 require_status health 200
@@ -132,10 +134,15 @@ require_type health application/json
 printf '%s' '{"status":"ok","service":"yohaku-api","store":"dynamodb"}' >"$tmp/health.expected"
 cmp -s "$tmp/health.body" "$tmp/health.expected" || fail "health body"
 
-fetch article-api "$site/api/articles/whitespace-as-product-design"
+fetch articles "$site/api/articles"
+require_status articles 200
+require_type articles application/json
+python3 -c 'import json,sys; slug=sys.argv[2]; rows=json.load(open(sys.argv[1])); assert isinstance(rows, list); assert all(row.get("slug")!=slug for row in rows)' "$tmp/articles.body" "$canary_slug" || fail "canary is in the public list"
+
+fetch article-api "$site/api/articles/$canary_slug"
 require_status article-api 200
 require_type article-api application/json
-python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("slug")=="whitespace-as-product-design" and d.get("title") and "error" not in d' "$tmp/article-api.body"
+python3 -c 'import json,sys; slug=sys.argv[2]; d=json.load(open(sys.argv[1])); assert d.get("slug")==slug and d.get("title")=="Deploy smoke canary" and "error" not in d' "$tmp/article-api.body" "$canary_slug" || fail "canary article"
 
 require_closed env /.env
 require_closed git /.git/config

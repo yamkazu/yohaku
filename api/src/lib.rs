@@ -34,7 +34,7 @@ pub fn app(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Connect to DynamoDB, ensure schema, and seed sample data when empty.
+/// Connect to DynamoDB, ensure schema, seed sample articles when the table is empty, and upsert the smoke canary.
 pub async fn build_state() -> anyhow::Result<AppState> {
     let store = DynamoStore::connect().await?;
     store.ensure_schema().await?;

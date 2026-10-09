@@ -120,6 +120,29 @@ async fn list_articles_returns_seeded_rows() {
     assert!(articles
         .iter()
         .any(|a| a["slug"] == "whitespace-as-product-design"));
+    assert!(articles.iter().all(|a| a["slug"] != seed::CANARY_SLUG));
+}
+
+#[tokio::test]
+async fn canary_is_readable_by_slug_but_hidden_from_the_list() {
+    // Arrange
+    let list_path = "/articles";
+    let canary_path = format!("/articles/{}", seed::CANARY_SLUG);
+
+    // Act
+    let (list_status, list) = json_get(list_path).await;
+    let (status, json) = json_get(&canary_path).await;
+
+    // Assert
+    assert_eq!(list_status, StatusCode::OK);
+    assert!(list
+        .as_array()
+        .expect("array")
+        .iter()
+        .all(|article| article["slug"] != seed::CANARY_SLUG));
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["slug"], seed::CANARY_SLUG);
+    assert_eq!(json["title"], "Deploy smoke canary");
 }
 
 #[tokio::test]

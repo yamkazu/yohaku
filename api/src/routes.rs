@@ -4,6 +4,7 @@ use axum::{Json, Router};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{Article, HealthResponse};
+use crate::seed::CANARY_SLUG;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -22,7 +23,14 @@ async fn health() -> Json<HealthResponse> {
 }
 
 async fn list_articles(State(state): State<AppState>) -> AppResult<Json<Vec<Article>>> {
-    Ok(Json(state.store.list_articles().await?))
+    let articles = state
+        .store
+        .list_articles()
+        .await?
+        .into_iter()
+        .filter(|article| article.slug != CANARY_SLUG)
+        .collect();
+    Ok(Json(articles))
 }
 
 async fn get_article(

@@ -4,16 +4,38 @@ use crate::error::AppResult;
 use crate::models::{Article, AuthorSummary};
 use crate::store::DynamoStore;
 
-pub async fn seed_if_empty(store: &DynamoStore) -> AppResult<()> {
-    if store.article_count().await? > 0 {
-        return Ok(());
-    }
+pub const CANARY_SLUG: &str = "deploy-smoke-canary";
 
-    tracing::info!("seeding sample articles");
-    for article in sample_articles() {
-        store.put_article(&article).await?;
+pub async fn seed_if_empty(store: &DynamoStore) -> AppResult<()> {
+    if store.article_count().await? == 0 {
+        tracing::info!("seeding sample articles");
+        for article in sample_articles() {
+            store.put_article(&article).await?;
+        }
     }
+    store.put_article(&canary_article()).await?;
     Ok(())
+}
+
+pub fn canary_article() -> Article {
+    Article {
+        id: "deploy-smoke-canary".into(),
+        slug: CANARY_SLUG.into(),
+        title: "Deploy smoke canary".into(),
+        excerpt: "Synthetic article for post-deploy smoke. Not for readers.".into(),
+        body: "Synthetic article for post-deploy smoke. Not for readers.".into(),
+        published_at: dt(2026, 1, 1),
+        reading_minutes: 1,
+        likes: 0,
+        comments: 0,
+        tags: vec![],
+        author: AuthorSummary {
+            id: "canary".into(),
+            name: "Deploy smoke".into(),
+            username: "deploy-smoke".into(),
+            avatar: "DS".into(),
+        },
+    }
 }
 
 fn dt(y: i32, m: u32, d: u32) -> chrono::DateTime<Utc> {
@@ -87,6 +109,23 @@ pub fn sample_articles() -> Vec<Article> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn canary_is_separate_from_sample_articles() {
+        // Arrange
+        let canary = canary_article();
+        let samples = sample_articles();
+
+        // Act
+        let sample_ids: HashSet<_> = samples.iter().map(|a| a.id.as_str()).collect();
+        let sample_slugs: HashSet<_> = samples.iter().map(|a| a.slug.as_str()).collect();
+
+        // Assert
+        assert_eq!(canary.slug, CANARY_SLUG);
+        assert!(!sample_ids.contains(canary.id.as_str()));
+        assert!(!sample_slugs.contains(canary.slug.as_str()));
+        assert!(!canary.title.is_empty());
+    }
 
     #[test]
     fn sample_articles_have_unique_slugs() {

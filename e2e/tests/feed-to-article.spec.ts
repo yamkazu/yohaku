@@ -13,6 +13,7 @@ test.describe('user harness: feed → article', () => {
     await expect(page.getByRole('heading', { level: 1, name: '余白' })).toBeVisible()
     const articleLink = page.getByRole('link', { name: new RegExp(articleTitle) })
     await expect(articleLink).toBeVisible()
+    await expect(page.getByText('Deploy smoke canary')).toHaveCount(0)
 
     // Act — open the article
     await articleLink.click()

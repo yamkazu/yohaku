@@ -21,6 +21,71 @@ if [[ "${1:-}" == "--site-url-from-log" ]]; then
   exit 0
 fi
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+eval "$(
+  python3 - "$ROOT/scripts/cloudfront-security-headers.json" <<'PY'
+import json, shlex, sys
+spec = json.load(open(sys.argv[1]))
+print(f"expect_hsts={shlex.quote(spec['strictTransportSecurity'])}")
+print(f"expect_cto={shlex.quote(spec['contentTypeOptions'])}")
+print(f"expect_frame={shlex.quote(spec['frameOptions'])}")
+print(f"expect_csp={shlex.quote(spec['contentSecurityPolicy'])}")
+PY
+)"
+
+if [[ "${1:-}" == "--self-check" ]]; then
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  fail() {
+    echo "smoke self-check: $*" >&2
+    exit 1
+  }
+  header_value() {
+    local file="$1" name="$2" lower
+    lower="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+    tr -d '\r' <"$file" | awk -v name="$lower" '
+      {
+        keylen = length(name) + 1
+        if (tolower(substr($0, 1, keylen)) == name ":") {
+          value = $0
+          sub(/^[^:]*:[[:space:]]*/, "", value)
+        }
+      }
+      END { printf "%s", value }
+    '
+  }
+  require_security_headers() {
+    local name="$1" got
+    got="$(header_value "$tmp/$name.headers" strict-transport-security)"
+    [[ "$got" == "$expect_hsts" ]] || fail "$name strict-transport-security $got"
+    got="$(header_value "$tmp/$name.headers" x-content-type-options)"
+    [[ "$got" == "$expect_cto" ]] || fail "$name x-content-type-options $got"
+    got="$(header_value "$tmp/$name.headers" x-frame-options)"
+    [[ "$got" == "$expect_frame" ]] || fail "$name x-frame-options $got"
+    got="$(header_value "$tmp/$name.headers" content-security-policy)"
+    [[ "$got" == "$expect_csp" ]] || fail "$name content-security-policy $got"
+  }
+  {
+    printf 'HTTP/1.1 200 OK\r\n'
+    printf 'Strict-Transport-Security: %s\r\n' "$expect_hsts"
+    printf 'X-Content-Type-Options: %s\r\n' "$expect_cto"
+    printf 'X-Frame-Options: %s\r\n' "$expect_frame"
+    printf 'Content-Security-Policy: %s\r\n' "$expect_csp"
+    printf '\r\n'
+  } >"$tmp/ok.headers"
+  {
+    printf 'HTTP/1.1 200 OK\r\n'
+    printf 'X-Content-Type-Options: nosniff\r\n'
+    printf '\r\n'
+  } >"$tmp/bad.headers"
+  require_security_headers ok
+  if ( require_security_headers bad ) 2>/dev/null; then
+    fail "expected missing headers to fail"
+  fi
+  echo "smoke self-check ok"
+  exit 0
+fi
+
 site="${SITE_URL:?}"
 if ! [[ "$site" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]]; then
   echo "refusing site url" >&2
@@ -115,6 +180,18 @@ reject_secrets() {
   fi
 }
 
+require_security_headers() {
+  local name="$1" got
+  got="$(header_value "$tmp/$name.headers" strict-transport-security)"
+  [[ "$got" == "$expect_hsts" ]] || fail "$name strict-transport-security $got"
+  got="$(header_value "$tmp/$name.headers" x-content-type-options)"
+  [[ "$got" == "$expect_cto" ]] || fail "$name x-content-type-options $got"
+  got="$(header_value "$tmp/$name.headers" x-frame-options)"
+  [[ "$got" == "$expect_frame" ]] || fail "$name x-frame-options $got"
+  got="$(header_value "$tmp/$name.headers" content-security-policy)"
+  [[ "$got" == "$expect_csp" ]] || fail "$name content-security-policy $got"
+}
+
 require_https_redirect root /
 require_https_redirect api-http /api/health
 
@@ -125,6 +202,7 @@ grep -F -q '余白 — 技術を、余白とともに' "$tmp/home.body" || fail 
 # S3 SSE-S3 (BucketEncryption.S3_MANAGED) on static responses, not a browser security header.
 enc="$(header_value "$tmp/home.headers" x-amz-server-side-encryption)"
 [[ "$enc" == "AES256" ]] || fail "home encryption header $enc"
+require_security_headers home
 
 require_app_shell article "/articles/$canary_slug"
 
@@ -133,6 +211,7 @@ require_status health 200
 require_type health application/json
 printf '%s' '{"status":"ok","service":"yohaku-api","store":"dynamodb"}' >"$tmp/health.expected"
 cmp -s "$tmp/health.body" "$tmp/health.expected" || fail "health body"
+require_security_headers health
 
 fetch articles "$site/api/articles"
 require_status articles 200

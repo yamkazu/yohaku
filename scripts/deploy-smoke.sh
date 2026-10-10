@@ -33,38 +33,42 @@ print(f"expect_csp={shlex.quote(spec['contentSecurityPolicy'])}")
 PY
 )"
 
-if [[ "${1:-}" == "--self-check" ]]; then
-  tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
-  fail() {
-    echo "smoke self-check: $*" >&2
-    exit 1
-  }
-  header_value() {
-    local file="$1" name="$2" lower
-    lower="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
-    tr -d '\r' <"$file" | awk -v name="$lower" '
-      {
-        keylen = length(name) + 1
-        if (tolower(substr($0, 1, keylen)) == name ":") {
-          value = $0
-          sub(/^[^:]*:[[:space:]]*/, "", value)
-        }
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+fail() {
+  echo "smoke: $*" >&2
+  exit 1
+}
+
+header_value() {
+  local file="$1" name="$2" lower
+  lower="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+  tr -d '\r' <"$file" | awk -v name="$lower" '
+    {
+      keylen = length(name) + 1
+      if (tolower(substr($0, 1, keylen)) == name ":") {
+        value = $0
+        sub(/^[^:]*:[[:space:]]*/, "", value)
       }
-      END { printf "%s", value }
-    '
-  }
-  require_security_headers() {
-    local name="$1" got
-    got="$(header_value "$tmp/$name.headers" strict-transport-security)"
-    [[ "$got" == "$expect_hsts" ]] || fail "$name strict-transport-security $got"
-    got="$(header_value "$tmp/$name.headers" x-content-type-options)"
-    [[ "$got" == "$expect_cto" ]] || fail "$name x-content-type-options $got"
-    got="$(header_value "$tmp/$name.headers" x-frame-options)"
-    [[ "$got" == "$expect_frame" ]] || fail "$name x-frame-options $got"
-    got="$(header_value "$tmp/$name.headers" content-security-policy)"
-    [[ "$got" == "$expect_csp" ]] || fail "$name content-security-policy $got"
-  }
+    }
+    END { printf "%s", value }
+  '
+}
+
+require_security_headers() {
+  local name="$1" got
+  got="$(header_value "$tmp/$name.headers" strict-transport-security)"
+  [[ "$got" == "$expect_hsts" ]] || fail "$name strict-transport-security $got"
+  got="$(header_value "$tmp/$name.headers" x-content-type-options)"
+  [[ "$got" == "$expect_cto" ]] || fail "$name x-content-type-options $got"
+  got="$(header_value "$tmp/$name.headers" x-frame-options)"
+  [[ "$got" == "$expect_frame" ]] || fail "$name x-frame-options $got"
+  got="$(header_value "$tmp/$name.headers" content-security-policy)"
+  [[ "$got" == "$expect_csp" ]] || fail "$name content-security-policy $got"
+}
+
+if [[ "${1:-}" == "--self-check" ]]; then
   {
     printf 'HTTP/1.1 200 OK\r\n'
     printf 'Strict-Transport-Security: %s\r\n' "$expect_hsts"
@@ -94,28 +98,6 @@ fi
 host="${site#https://}"
 user_agent="YohakuDeploySmoke/1.0"
 canary_slug="deploy-smoke-canary"
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-
-fail() {
-  echo "smoke: $*" >&2
-  exit 1
-}
-
-header_value() {
-  local file="$1" name="$2" lower
-  lower="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
-  tr -d '\r' <"$file" | awk -v name="$lower" '
-    {
-      keylen = length(name) + 1
-      if (tolower(substr($0, 1, keylen)) == name ":") {
-        value = $0
-        sub(/^[^:]*:[[:space:]]*/, "", value)
-      }
-    }
-    END { printf "%s", value }
-  '
-}
 
 fetch() {
   local name="$1" url="$2" code
@@ -178,18 +160,6 @@ reject_secrets() {
   if grep -E -q 'AKIA[0-9A-Z]{16}|AWS_SECRET_ACCESS_KEY|BEGIN PRIVATE KEY|ListBucketResult' "$tmp"/*.body; then
     fail "response leaked a secret or a bucket listing"
   fi
-}
-
-require_security_headers() {
-  local name="$1" got
-  got="$(header_value "$tmp/$name.headers" strict-transport-security)"
-  [[ "$got" == "$expect_hsts" ]] || fail "$name strict-transport-security $got"
-  got="$(header_value "$tmp/$name.headers" x-content-type-options)"
-  [[ "$got" == "$expect_cto" ]] || fail "$name x-content-type-options $got"
-  got="$(header_value "$tmp/$name.headers" x-frame-options)"
-  [[ "$got" == "$expect_frame" ]] || fail "$name x-frame-options $got"
-  got="$(header_value "$tmp/$name.headers" content-security-policy)"
-  [[ "$got" == "$expect_csp" ]] || fail "$name content-security-policy $got"
 }
 
 require_https_redirect root /

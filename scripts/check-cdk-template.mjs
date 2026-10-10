@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const securityHeadersSpec = JSON.parse(
+  readFileSync(join(repoRoot, "scripts/cloudfront-security-headers.json"), "utf8"),
+);
 
 const path = process.argv[2];
 if (!path) {
@@ -90,6 +96,52 @@ const apiBehavior = behaviors.find((behavior) => behavior.PathPattern === "api/*
 if (!apiBehavior) throw new Error("missing api/* behavior");
 if (apiBehavior.ViewerProtocolPolicy !== "redirect-to-https") {
   throw new Error("api behavior protocol");
+}
+
+const headerPolicies = byType("AWS::CloudFront::ResponseHeadersPolicy");
+if (headerPolicies.length !== 1) {
+  throw new Error(`expected 1 response headers policy, got ${headerPolicies.length}`);
+}
+const securityConfig = headerPolicies[0].Properties.ResponseHeadersPolicyConfig.SecurityHeadersConfig;
+if (!securityConfig) throw new Error("missing SecurityHeadersConfig");
+const expectMaxAge = Number(
+  /^max-age=(\d+)$/.exec(securityHeadersSpec.strictTransportSecurity)?.[1],
+);
+if (!Number.isFinite(expectMaxAge)) {
+  throw new Error(`bad strictTransportSecurity ${securityHeadersSpec.strictTransportSecurity}`);
+}
+const hsts = securityConfig.StrictTransportSecurity;
+if (!hsts || hsts.AccessControlMaxAgeSec !== expectMaxAge || hsts.Override !== true) {
+  throw new Error(`hsts ${JSON.stringify(hsts)}`);
+}
+const cto = securityConfig.ContentTypeOptions;
+if (!cto || cto.Override !== true) throw new Error(`contentTypeOptions ${JSON.stringify(cto)}`);
+if (securityHeadersSpec.contentTypeOptions !== "nosniff") {
+  throw new Error(`spec contentTypeOptions ${securityHeadersSpec.contentTypeOptions}`);
+}
+const frame = securityConfig.FrameOptions;
+if (
+  !frame ||
+  frame.FrameOption !== securityHeadersSpec.frameOptions ||
+  frame.Override !== true
+) {
+  throw new Error(`frameOptions ${JSON.stringify(frame)}`);
+}
+const csp = securityConfig.ContentSecurityPolicy;
+if (!csp || csp.Override !== true) throw new Error(`csp ${JSON.stringify(csp)}`);
+if (csp.ContentSecurityPolicy !== securityHeadersSpec.contentSecurityPolicy) {
+  throw new Error(`csp mismatch ${csp.ContentSecurityPolicy}`);
+}
+if ("XSSProtection" in securityConfig || "ReferrerPolicy" in securityConfig) {
+  throw new Error("unexpected extra security headers beyond issue #32 set");
+}
+
+const defaultPolicy = config.DefaultCacheBehavior.ResponseHeadersPolicyId;
+const apiPolicy = apiBehavior.ResponseHeadersPolicyId;
+if (!defaultPolicy) throw new Error("default behavior missing ResponseHeadersPolicyId");
+if (!apiPolicy) throw new Error("api/* missing ResponseHeadersPolicyId");
+if (JSON.stringify(defaultPolicy) !== JSON.stringify(apiPolicy)) {
+  throw new Error("default and api/* must share the same response headers policy");
 }
 
 const manifest = JSON.parse(readFileSync(join(dirname(path), "manifest.json"), "utf8"));

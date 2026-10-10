@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { createContext, runInNewContext } from "node:vm";
 import test from "node:test";
-import { apiViewerSource, spaViewerSource } from "../lib/yohaku-stack.js";
+import {
+  apiViewerSource,
+  siteContentSecurityPolicy,
+  spaViewerSource,
+} from "../lib/yohaku-stack.js";
 
 function rewrite(source: string, uri: string): string {
   const event = { request: { uri } };
@@ -26,4 +30,11 @@ test("extensionless site paths load the client", () => {
   );
   assert.equal(rewrite(spaViewerSource, "/assets/index-abc.js"), "/assets/index-abc.js");
   assert.equal(rewrite(spaViewerSource, "/favicon.svg"), "/favicon.svg");
+});
+
+test("site CSP allows Google Fonts used by index.html", () => {
+  const policy = siteContentSecurityPolicy;
+  assert.match(policy, /style-src[^;]*https:\/\/fonts\.googleapis\.com/);
+  assert.match(policy, /font-src[^;]*https:\/\/fonts\.gstatic\.com/);
+  assert.match(policy, /default-src 'self'/);
 });

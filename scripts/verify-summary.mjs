@@ -6,6 +6,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
+// Names shared with scripts/verify.sh EVIDENCE_SHOTS and the e2e spec.
+const evidenceNames = ['article-list.png', 'article-detail.png', 'not-found.png']
+
 const verifyDir = process.argv[2]
 const exitCode = Number(process.argv[3] ?? '1')
 if (!verifyDir) {
@@ -33,8 +36,17 @@ function tail(rel, lines = 80) {
 
 const failed = steps.find((step) => step.status === 'failed') ?? null
 const ok = exitCode === 0 && !failed
+const anySkipped = steps.some((step) => step.status === 'skipped')
 const playwrightDir = join(verifyDir, 'playwright')
 const playwright = existsSync(playwrightDir) ? '.verify/playwright' : null
+const screenshotsDir = join(verifyDir, 'screenshots')
+const screenshots = evidenceNames
+  .filter((name) => existsSync(join(screenshotsDir, name)))
+  .map((name) => `.verify/screenshots/${name}`)
+const evidenceErrorPath = join(verifyDir, 'evidence-error.txt')
+const evidenceError = existsSync(evidenceErrorPath)
+  ? readFileSync(evidenceErrorPath, 'utf8').trim()
+  : ''
 const serverLogs = {}
 if (existsSync(join(verifyDir, 'dynamodb-server.log'))) {
   serverLogs.dynamodb = '.verify/dynamodb-server.log'
@@ -45,12 +57,14 @@ if (existsSync(join(verifyDir, 'api-server.log'))) {
 
 let message
 if (ok) {
-  message = 'all steps passed'
+  message = anySkipped ? 'selected steps passed' : 'all steps passed'
 } else if (failed) {
   message = `${failed.name} failed (exit ${failed.exitCode}). See ${failed.log}`
   if (failed.name === 'e2e' && playwright) {
     message += ` and ${playwright}`
   }
+} else if (evidenceError) {
+  message = evidenceError
 } else {
   message = `verify failed (exit ${exitCode})`
 }
@@ -65,6 +79,7 @@ const summary = {
   failedStep: failed ? failed.name : null,
   failedLog: failed ? failed.log : null,
   playwright,
+  screenshots: screenshots.length ? screenshots : null,
   serverLogs,
   logTail: failed ? tail(failed.log) : null,
   apiLogTail: includeApiTail ? tail('.verify/api-server.log', 40) : null,

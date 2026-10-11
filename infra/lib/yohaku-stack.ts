@@ -33,6 +33,25 @@ export const spaViewerSource = `function handler(event) {
 }
 `;
 
+const securityHeadersSpec = JSON.parse(
+  readFileSync(join(repoRoot, "scripts/cloudfront-security-headers.json"), "utf8"),
+) as {
+  strictTransportSecurity: string;
+  contentTypeOptions: string;
+  frameOptions: string;
+  contentSecurityPolicy: string;
+};
+
+export const siteContentSecurityPolicy = securityHeadersSpec.contentSecurityPolicy;
+
+function hstsMaxAgeSeconds(header: string): number {
+  const match = /^max-age=(\d+)$/.exec(header);
+  if (!match) {
+    throw new Error(`unsupported Strict-Transport-Security ${header}`);
+  }
+  return Number(match[1]);
+}
+
 function walk(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
@@ -135,11 +154,40 @@ export class YohakuStack extends Stack {
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
 
+    if (securityHeadersSpec.contentTypeOptions !== "nosniff") {
+      throw new Error(`unsupported X-Content-Type-Options ${securityHeadersSpec.contentTypeOptions}`);
+    }
+    if (securityHeadersSpec.frameOptions !== "DENY") {
+      throw new Error(`unsupported X-Frame-Options ${securityHeadersSpec.frameOptions}`);
+    }
+
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, "SecurityHeaders", {
+      comment: "Browser security headers for the public site and api/*",
+      securityHeadersBehavior: {
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.seconds(
+            hstsMaxAgeSeconds(securityHeadersSpec.strictTransportSecurity),
+          ),
+          override: true,
+        },
+        contentTypeOptions: { override: true },
+        frameOptions: {
+          frameOption: cloudfront.HeadersFrameOption.DENY,
+          override: true,
+        },
+        contentSecurityPolicy: {
+          contentSecurityPolicy: siteContentSecurityPolicy,
+          override: true,
+        },
+      },
+    });
+
     const distribution = new cloudfront.Distribution(this, "Site", {
       defaultRootObject: "index.html",
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        responseHeadersPolicy: securityHeaders,
         functionAssociations: [
           {
             function: spaViewer,
@@ -154,6 +202,7 @@ export class YohakuStack extends Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+          responseHeadersPolicy: securityHeaders,
           functionAssociations: [
             {
               function: apiViewer,

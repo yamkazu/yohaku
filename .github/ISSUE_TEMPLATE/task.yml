@@ -1,0 +1,60 @@
+# 提出後の本文は、各欄の label（目的 / 今 / やること / やらないこと / 依存 / 検証）が見出しになる。
+# id はフォーム定義用で、本文には出ない。
+name: 作業
+description: outer loop が issue だけで、エージェントに渡してよいかを判断できる形で書く。
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: 終わったときに何ができるようになるか。埋めたい穴があれば、その issue 番号を書く。
+      placeholder: 変更に関係する検証だけを、エージェントが自分で再実行できるようにする。
+    validations:
+      required: false
+  - type: textarea
+    id: current
+    attributes:
+      label: 今
+      description: 今のコードと運用がどうなっているか。ファイル、コマンド、issue 番号で指す。
+      placeholder: |
+        `npm run verify` は毎回すべてのステップを流す。関係する検証だけを再実行する入り口は無い。
+    validations:
+      required: false
+  - type: textarea
+    id: tasks
+    attributes:
+      label: やること
+      description: このリポジトリで変えることを、箇条書きで書く。
+      placeholder: |
+        - 指定したステップだけを流す入り口を足す
+        - 流さなかったステップは結果に skipped で残す
+    validations:
+      required: false
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: やらないこと
+      description: この issue では触らないこと。空にしない。範囲が書いてあると、エージェントは隣の変更をしない。
+      placeholder: |
+        - 新しい機能や E2E の追加
+        - CI のジョブ構成の変更
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 依存
+      description: 先に閉じている必要がある issue。無ければ「なし」と書く。開いている依存があるあいだは、エージェントに渡さない。
+      placeholder: なし。
+    validations:
+      required: false
+  - type: textarea
+    id: verification
+    attributes:
+      label: 検証
+      description: 終わったと判定する手順。通しは `npm run verify`。ステップを限って流せるときは `npm run verify -- --only <step>` でもよい。
+      placeholder: |
+        - `npm run verify` が通る
+        - 確認したコマンドと結果を PR 本文に書く
+    validations:
+      required: true

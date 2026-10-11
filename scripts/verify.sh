@@ -26,6 +26,7 @@ ALL_STEPS=(
   dynamodb
   api-fmt
   api-clippy
+  api-deny
   api-build
   api-test
   api-start

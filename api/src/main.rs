@@ -1,10 +1,15 @@
-//! 余白 API — Axum + DynamoDB (Lambda Web Adapter compatible)
+//! 余白 API — Axum + `DynamoDB` (Lambda Web Adapter compatible)
 
 use std::net::SocketAddr;
 
 use tracing_subscriber::EnvFilter;
 use yohaku_api::{app, build_state};
 
+/// Bind the HTTP server and serve the API.
+///
+/// # Errors
+///
+/// Returns an error when startup cannot reach `DynamoDB`, prepare the table, or bind `PORT`.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()

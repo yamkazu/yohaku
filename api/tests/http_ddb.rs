@@ -1,8 +1,8 @@
-//! HTTP integration against DynamoDB Local.
+//! HTTP integration against `DynamoDB` Local.
 //!
-//! Requires feature `integration` and a running DynamoDB Local endpoint:
+//! Requires feature `integration` and a running `DynamoDB` Local endpoint:
 //!   npm run dev:ddb   # or scripts/start-dynamodb.sh
-//!   DYNAMODB_ENDPOINT=http://127.0.0.1:8000 cargo test --features integration --locked
+//!   `DYNAMODB_ENDPOINT=http://127.0.0.1:8000` cargo test --features integration --locked
 
 use std::sync::Arc;
 
@@ -21,12 +21,15 @@ use yohaku_api::{app, AppState};
 
 static TABLE: OnceCell<String> = OnceCell::const_new();
 
-fn require_ddb_endpoint() {
-    std::env::var("DYNAMODB_ENDPOINT")
-        .or_else(|_| std::env::var("AWS_ENDPOINT_URL_DYNAMODB"))
-        .expect(
-            "integration tests require DYNAMODB_ENDPOINT (start scripts/start-dynamodb.sh first)",
+fn require_ddb_endpoint() -> anyhow::Result<()> {
+    if std::env::var("DYNAMODB_ENDPOINT").is_err()
+        && std::env::var("AWS_ENDPOINT_URL_DYNAMODB").is_err()
+    {
+        anyhow::bail!(
+            "integration tests require DYNAMODB_ENDPOINT (start scripts/start-dynamodb.sh first)"
         );
+    }
+    Ok(())
 }
 
 fn ensure_local_aws_creds() {
@@ -52,84 +55,71 @@ fn init_tracing() {
         .try_init();
 }
 
-async fn shared_table() -> String {
+async fn shared_table() -> anyhow::Result<String> {
     init_tracing();
-    TABLE
-        .get_or_init(|| async {
-            require_ddb_endpoint();
+    let table = TABLE
+        .get_or_try_init(|| async {
+            require_ddb_endpoint()?;
             ensure_local_aws_creds();
 
             let table = std::env::var("YOHAKU_TABLE")
                 .unwrap_or_else(|_| format!("yohaku-it-{}", Uuid::new_v4().simple()));
-            let store = DynamoStore::connect_with_table(&table)
-                .await
-                .expect("connect to DynamoDB Local");
-            store.ensure_schema().await.expect("ensure_schema");
-            seed::seed_if_empty(&store).await.expect("seed");
-            table
+            let store = DynamoStore::connect_with_table(&table).await?;
+            store.ensure_schema().await?;
+            seed::seed_if_empty(&store).await?;
+            Ok::<String, anyhow::Error>(table)
         })
-        .await
-        .clone()
+        .await?
+        .clone();
+    Ok(table)
 }
 
-async fn test_app() -> axum::Router {
-    let table = shared_table().await;
-    let store = DynamoStore::connect_with_table(table)
-        .await
-        .expect("connect to DynamoDB Local");
-    app(AppState {
+async fn test_app() -> anyhow::Result<axum::Router> {
+    let table = shared_table().await?;
+    let store = DynamoStore::connect_with_table(table).await?;
+    Ok(app(AppState {
         store: Arc::new(store),
-    })
+    }))
 }
 
 fn assert_status(actual: StatusCode, expected: StatusCode, body: &Value) {
     assert_eq!(actual, expected, "response body: {body}");
 }
 
-async fn json_get(path: &str) -> (StatusCode, Value) {
+async fn json_get(path: &str) -> anyhow::Result<(StatusCode, Value)> {
     let response = test_app()
-        .await
-        .oneshot(
-            Request::builder()
-                .uri(path)
-                .body(Body::empty())
-                .expect("request"),
-        )
-        .await
-        .expect("response");
+        .await?
+        .oneshot(Request::builder().uri(path).body(Body::empty())?)
+        .await?;
     let status = response.status();
-    let bytes = response
-        .into_body()
-        .collect()
-        .await
-        .expect("body")
-        .to_bytes();
+    let bytes = response.into_body().collect().await?.to_bytes();
     let json: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
-    (status, json)
+    Ok((status, json))
 }
 
 #[tokio::test]
-async fn health_ok() {
+async fn health_ok() -> anyhow::Result<()> {
     // Arrange
     let path = "/health";
 
     // Act
-    let (status, json) = json_get(path).await;
+    let (status, json) = json_get(path).await?;
 
     // Assert
     assert_status(status, StatusCode::OK, &json);
     assert_eq!(json["status"], "ok");
     assert_eq!(json["service"], "yohaku-api");
     assert_eq!(json["store"], "dynamodb");
+    Ok(())
 }
 
 #[tokio::test]
-async fn list_articles_returns_seeded_rows() {
+async fn list_articles_returns_seeded_rows() -> anyhow::Result<()> {
     // Arrange
     let path = "/articles";
 
     // Act
-    let (status, json) = json_get(path).await;
+    let (status, json) = json_get(path).await?;
 
     // Assert
     assert_status(status, StatusCode::OK, &json);
@@ -143,17 +133,18 @@ async fn list_articles_returns_seeded_rows() {
         .iter()
         .any(|a| a["slug"] == "whitespace-as-product-design"));
     assert!(articles.iter().all(|a| a["slug"] != seed::CANARY_SLUG));
+    Ok(())
 }
 
 #[tokio::test]
-async fn canary_is_readable_by_slug_but_hidden_from_the_list() {
+async fn canary_is_readable_by_slug_but_hidden_from_the_list() -> anyhow::Result<()> {
     // Arrange
     let list_path = "/articles";
     let canary_path = format!("/articles/{}", seed::CANARY_SLUG);
 
     // Act
-    let (list_status, list) = json_get(list_path).await;
-    let (status, json) = json_get(&canary_path).await;
+    let (list_status, list) = json_get(list_path).await?;
+    let (status, json) = json_get(&canary_path).await?;
 
     // Assert
     assert_status(list_status, StatusCode::OK, &list);
@@ -165,15 +156,16 @@ async fn canary_is_readable_by_slug_but_hidden_from_the_list() {
     assert_status(status, StatusCode::OK, &json);
     assert_eq!(json["slug"], seed::CANARY_SLUG);
     assert_eq!(json["title"], "Deploy smoke canary");
+    Ok(())
 }
 
 #[tokio::test]
-async fn get_known_slug_returns_article() {
+async fn get_known_slug_returns_article() -> anyhow::Result<()> {
     // Arrange
     let path = "/articles/quiet-apis";
 
     // Act
-    let (status, json) = json_get(path).await;
+    let (status, json) = json_get(path).await?;
 
     // Assert
     assert_status(status, StatusCode::OK, &json);
@@ -185,17 +177,19 @@ async fn get_known_slug_returns_article() {
     assert_eq!(article.slug, "quiet-apis");
     assert!(!article.title.is_empty());
     assert!(!article.body.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn unknown_slug_returns_404() {
+async fn unknown_slug_returns_404() -> anyhow::Result<()> {
     // Arrange
     let path = "/articles/does-not-exist-slug";
 
     // Act
-    let (status, json) = json_get(path).await;
+    let (status, json) = json_get(path).await?;
 
     // Assert
     assert_status(status, StatusCode::NOT_FOUND, &json);
     assert_eq!(json["error"], "not found");
+    Ok(())
 }

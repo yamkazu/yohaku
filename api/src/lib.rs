@@ -1,4 +1,4 @@
-//! 余白 API library — Axum + DynamoDB (Lambda Web Adapter compatible)
+//! 余白 API library — Axum + `DynamoDB` (Lambda Web Adapter compatible)
 //! Slice 1: health + article list + article detail
 
 use std::sync::Arc;
@@ -34,7 +34,11 @@ pub fn app(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Connect to DynamoDB, ensure schema, seed sample articles when the table is empty, and upsert the smoke canary.
+/// Connect to `DynamoDB`, ensure schema, seed sample articles when the table is empty, and upsert the smoke canary.
+///
+/// # Errors
+///
+/// Returns an error when connecting, creating the table, waiting for it to become active, or seeding fails.
 pub async fn build_state() -> anyhow::Result<AppState> {
     let store = DynamoStore::connect().await?;
     store.ensure_schema().await?;

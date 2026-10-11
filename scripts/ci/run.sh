@@ -3,7 +3,7 @@
 # 引数 1 つでステップ名を受け取り、対応するコマンドを実行する。
 #
 # ステップ: web-install, web-lint, web-build, dynamodb, api-fmt, api-clippy,
-# api-build, api-test, api-start, e2e-install, playwright-install, e2e
+# api-deny, api-build, api-test, api-start, e2e-install, playwright-install, e2e
 #
 # 使い方:
 #   bash scripts/ci/run.sh web-lint
@@ -22,7 +22,8 @@ steps:
   web-build            tsc + vite build
   dynamodb             start DynamoDB Local and wait until the port is open
   api-fmt              cargo fmt --check
-  api-clippy           cargo clippy --features integration -D warnings
+  api-clippy           cargo clippy --features integration --all-targets -D warnings
+  api-deny             cargo deny check (licenses + advisories)
   api-build            cargo build --locked --features integration
   api-test             cargo test --locked --features integration
   api-start            start the debug API binary and wait for /health
@@ -128,6 +129,64 @@ start_api() {
   exit 1
 }
 
+# cargo-deny is not part of the rustup toolchain. Install the pinned release
+# into ${CARGO_HOME:-~/.cargo}/bin so CI and `npm run verify` share one binary.
+CARGO_DENY_VERSION="0.20.2"
+
+cargo_deny_target() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  case "${os}-${arch}" in
+    Linux-x86_64) echo "x86_64-unknown-linux-musl" ;;
+    Linux-aarch64) echo "aarch64-unknown-linux-musl" ;;
+    Darwin-x86_64) echo "x86_64-apple-darwin" ;;
+    Darwin-arm64) echo "aarch64-apple-darwin" ;;
+    *)
+      echo "no cargo-deny ${CARGO_DENY_VERSION} build for ${os}-${arch}" >&2
+      return 1
+      ;;
+  esac
+}
+
+cargo_deny_sha256() {
+  case "$1" in
+    x86_64-unknown-linux-musl) echo "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f" ;;
+    aarch64-unknown-linux-musl) echo "995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d" ;;
+    x86_64-apple-darwin) echo "248da7f581724e470071990c088ffc55c811981715f4cbdb258621fb79f8b7a6" ;;
+    aarch64-apple-darwin) echo "fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3" ;;
+    *)
+      echo "missing checksum for $1" >&2
+      return 1
+      ;;
+  esac
+}
+
+ensure_cargo_deny() {
+  local bindir="${CARGO_HOME:-$HOME/.cargo}/bin"
+  local bin="$bindir/cargo-deny"
+  if [[ -x "$bin" ]] && "$bin" --version | grep -q "cargo-deny ${CARGO_DENY_VERSION}"; then
+    return 0
+  fi
+
+  local target sha name url tmp
+  target="$(cargo_deny_target)"
+  sha="$(cargo_deny_sha256 "$target")"
+  name="cargo-deny-${CARGO_DENY_VERSION}-${target}"
+  url="https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${name}.tar.gz"
+  tmp="$(mktemp -d)"
+  curl -fsSL -o "$tmp/cargo-deny.tar.gz" "$url"
+  if command -v sha256sum >/dev/null 2>&1; then
+    echo "${sha}  $tmp/cargo-deny.tar.gz" | sha256sum -c -
+  else
+    echo "${sha}  $tmp/cargo-deny.tar.gz" | shasum -a 256 -c -
+  fi
+  tar -xzf "$tmp/cargo-deny.tar.gz" -C "$tmp"
+  mkdir -p "$bindir"
+  install -m 755 "$tmp/${name}/cargo-deny" "$bin"
+  rm -rf "$tmp"
+}
+
 cmd="${1:-}"
 case "$cmd" in
   web-install)
@@ -146,8 +205,12 @@ case "$cmd" in
     (cd "$ROOT/api" && cargo fmt --check)
     ;;
   api-clippy)
-    # integration enables the DynamoDB Local tests; clippy sees the same crate CI does.
-    (cd "$ROOT/api" && cargo clippy --locked --features integration -- -D warnings)
+    # integration enables the DynamoDB Local tests; --all-targets lints those too.
+    (cd "$ROOT/api" && cargo clippy --locked --features integration --all-targets -- -D warnings)
+    ;;
+  api-deny)
+    ensure_cargo_deny
+    (cd "$ROOT/api" && "${CARGO_HOME:-$HOME/.cargo}/bin/cargo-deny" check advisories licenses)
     ;;
   api-build)
     (cd "$ROOT/api" && cargo build --locked --features integration)

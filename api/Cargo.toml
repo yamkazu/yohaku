@@ -3,6 +3,7 @@ name = "yohaku-api"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.94.1"
+publish = false
 description = "余白 API — Axum on AWS Lambda Web Adapter + DynamoDB"
 
 [features]
@@ -14,7 +15,12 @@ integration = []
 anyhow = "1"
 async-trait = "0.1"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1"
+# `rustls` on this SDK release selects the legacy hyper 0.14 client (rustls 0.21).
+# `default-https-client` is the current client.
+aws-sdk-dynamodb = { version = "1", default-features = false, features = [
+    "rt-tokio",
+    "default-https-client",
+] }
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
@@ -35,3 +41,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 name = "http_ddb"
 path = "tests/http_ddb.rs"
 required-features = ["integration"]
+
+[lints.clippy]
+# Lower priority than the explicit denies, so a later allow can override one pedantic lint.
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+as_conversions = "deny"
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "deny"

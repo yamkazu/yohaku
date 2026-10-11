@@ -38,7 +38,7 @@ pub fn app(state: AppState) -> Router {
 ///
 /// # Errors
 ///
-/// Returns an error when connecting, creating the table, or seeding fails.
+/// Returns an error when connecting, creating the table, waiting for it to become active, or seeding fails.
 pub async fn build_state() -> anyhow::Result<AppState> {
     let store = DynamoStore::connect().await?;
     store.ensure_schema().await?;

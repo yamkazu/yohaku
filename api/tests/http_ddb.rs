@@ -12,13 +12,14 @@ use http_body_util::BodyExt;
 use serde_json::Value;
 use tokio::sync::OnceCell;
 use tower::ServiceExt;
+use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 use yohaku_api::models::Article;
 use yohaku_api::seed;
 use yohaku_api::store::DynamoStore;
 use yohaku_api::{app, AppState};
 
-static APP: OnceCell<axum::Router> = OnceCell::const_new();
+static TABLE: OnceCell<String> = OnceCell::const_new();
 
 fn require_ddb_endpoint() {
     std::env::var("DYNAMODB_ENDPOINT")
@@ -43,29 +44,50 @@ fn ensure_local_aws_creds() {
     }
 }
 
-async fn shared_app() -> axum::Router {
-    APP.get_or_init(|| async {
-        require_ddb_endpoint();
-        ensure_local_aws_creds();
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_test_writer()
+        .try_init();
+}
 
-        let table = std::env::var("YOHAKU_TABLE")
-            .unwrap_or_else(|_| format!("yohaku-it-{}", Uuid::new_v4().simple()));
-        let store = DynamoStore::connect_with_table(table)
-            .await
-            .expect("connect to DynamoDB Local");
-        store.ensure_schema().await.expect("ensure_schema");
-        seed::seed_if_empty(&store).await.expect("seed");
+async fn shared_table() -> String {
+    init_tracing();
+    TABLE
+        .get_or_init(|| async {
+            require_ddb_endpoint();
+            ensure_local_aws_creds();
 
-        app(AppState {
-            store: Arc::new(store),
+            let table = std::env::var("YOHAKU_TABLE")
+                .unwrap_or_else(|_| format!("yohaku-it-{}", Uuid::new_v4().simple()));
+            let store = DynamoStore::connect_with_table(&table)
+                .await
+                .expect("connect to DynamoDB Local");
+            store.ensure_schema().await.expect("ensure_schema");
+            seed::seed_if_empty(&store).await.expect("seed");
+            table
         })
+        .await
+        .clone()
+}
+
+async fn test_app() -> axum::Router {
+    let table = shared_table().await;
+    let store = DynamoStore::connect_with_table(table)
+        .await
+        .expect("connect to DynamoDB Local");
+    app(AppState {
+        store: Arc::new(store),
     })
-    .await
-    .clone()
+}
+
+fn assert_status(actual: StatusCode, expected: StatusCode, body: &Value) {
+    assert_eq!(actual, expected, "response body: {body}");
 }
 
 async fn json_get(path: &str) -> (StatusCode, Value) {
-    let response = shared_app()
+    let response = test_app()
         .await
         .oneshot(
             Request::builder()
@@ -95,7 +117,7 @@ async fn health_ok() {
     let (status, json) = json_get(path).await;
 
     // Assert
-    assert_eq!(status, StatusCode::OK);
+    assert_status(status, StatusCode::OK, &json);
     assert_eq!(json["status"], "ok");
     assert_eq!(json["service"], "yohaku-api");
     assert_eq!(json["store"], "dynamodb");
@@ -110,7 +132,7 @@ async fn list_articles_returns_seeded_rows() {
     let (status, json) = json_get(path).await;
 
     // Assert
-    assert_eq!(status, StatusCode::OK);
+    assert_status(status, StatusCode::OK, &json);
     let articles = json.as_array().expect("array");
     assert!(
         articles.len() >= 3,
@@ -134,13 +156,13 @@ async fn canary_is_readable_by_slug_but_hidden_from_the_list() {
     let (status, json) = json_get(&canary_path).await;
 
     // Assert
-    assert_eq!(list_status, StatusCode::OK);
+    assert_status(list_status, StatusCode::OK, &list);
     assert!(list
         .as_array()
         .expect("array")
         .iter()
         .all(|article| article["slug"] != seed::CANARY_SLUG));
-    assert_eq!(status, StatusCode::OK);
+    assert_status(status, StatusCode::OK, &json);
     assert_eq!(json["slug"], seed::CANARY_SLUG);
     assert_eq!(json["title"], "Deploy smoke canary");
 }
@@ -154,7 +176,7 @@ async fn get_known_slug_returns_article() {
     let (status, json) = json_get(path).await;
 
     // Assert
-    assert_eq!(status, StatusCode::OK);
+    assert_status(status, StatusCode::OK, &json);
     assert!(
         json.get("cover_tone").is_none(),
         "cover_tone must not appear in the API response"
@@ -174,6 +196,6 @@ async fn unknown_slug_returns_404() {
     let (status, json) = json_get(path).await;
 
     // Assert
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_status(status, StatusCode::NOT_FOUND, &json);
     assert_eq!(json["error"], "not found");
 }

@@ -17,7 +17,7 @@ impl IntoResponse for AppError {
         let (status, message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::Other(err) => {
-                tracing::error!(error = %err, "internal error");
+                tracing::error!(error = %format_args!("{err:#}"), "internal error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
             }
         };

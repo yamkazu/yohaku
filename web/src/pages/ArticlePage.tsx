@@ -4,13 +4,16 @@ import { fetchArticle, formatDate, type Article } from '../lib/api'
 
 export function ArticlePage() {
   const { slug = '' } = useParams()
+  // slug ごとに作り直して、前の記事の状態を持ち越さない
+  return <ArticleView key={slug} slug={slug} />
+}
+
+function ArticleView({ slug }: { slug: string }) {
   const [article, setArticle] = useState<Article | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setArticle(null)
-    setError(null)
     fetchArticle(slug)
       .then((data) => {
         if (!cancelled) setArticle(data)

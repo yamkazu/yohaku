@@ -17,11 +17,24 @@ pub struct DynamoStore {
 }
 
 impl DynamoStore {
+    /// Open a client for the table named by `YOHAKU_TABLE` (`yohaku` when unset).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when AWS configuration cannot be loaded.
     pub async fn connect() -> anyhow::Result<Self> {
         let table = env::var("YOHAKU_TABLE").unwrap_or_else(|_| "yohaku".into());
         Self::connect_with_table(table).await
     }
 
+    /// Open a client for `table`.
+    ///
+    /// `DYNAMODB_ENDPOINT` or `AWS_ENDPOINT_URL_DYNAMODB`, when set, overrides the
+    /// AWS endpoint. Otherwise the default AWS endpoint is used.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when AWS configuration cannot be loaded.
     pub async fn connect_with_table(table: impl Into<String>) -> anyhow::Result<Self> {
         let table = table.into();
 
@@ -52,6 +65,11 @@ impl DynamoStore {
         Ok(Self { client, table })
     }
 
+    /// Create the table and its slug index when they are missing, then wait until the table is active.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table cannot be created.
     pub async fn ensure_schema(&self) -> AppResult<()> {
         if self
             .client
@@ -103,8 +121,7 @@ impl DynamoStore {
                 .ok()
                 .and_then(|o| o.table)
                 .and_then(|t| t.table_status)
-                .map(|s| s.as_str() == "ACTIVE")
-                .unwrap_or(false);
+                .is_some_and(|s| s.as_str() == "ACTIVE");
             if active {
                 break;
             }
@@ -114,10 +131,20 @@ impl DynamoStore {
         Ok(())
     }
 
+    /// Count stored articles.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table scan fails or an item cannot be decoded.
     pub async fn article_count(&self) -> AppResult<usize> {
         Ok(self.list_articles().await?.len())
     }
 
+    /// List articles, newest `published_at` first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table scan fails or an item cannot be decoded.
     pub async fn list_articles(&self) -> AppResult<Vec<Article>> {
         let mut articles = Vec::new();
         let mut start_key = None;
@@ -149,6 +176,11 @@ impl DynamoStore {
         Ok(articles)
     }
 
+    /// Load the article whose slug index key is `SLUG#{slug}`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails or the item cannot be decoded.
     pub async fn get_article_by_slug(&self, slug: &str) -> AppResult<Option<Article>> {
         let out = self
             .client
@@ -165,6 +197,11 @@ impl DynamoStore {
         out.items().first().map(article_from_item).transpose()
     }
 
+    /// Insert or replace `article`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the write fails.
     pub async fn put_article(&self, article: &Article) -> AppResult<()> {
         self.client
             .put_item()
@@ -257,7 +294,7 @@ fn article_from_item(item: &HashMap<String, AttributeValue>) -> AppResult<Articl
         published_at: DateTime::parse_from_rfc3339(&s(item, "published_at")?)
             .map_err(|e| AppError::Other(e.into()))?
             .with_timezone(&Utc),
-        reading_minutes: n_u64(item, "reading_minutes")? as u32,
+        reading_minutes: n_u32(item, "reading_minutes")?,
         likes: n_u64(item, "likes")?,
         comments: n_u64(item, "comments")?,
         tags: item
@@ -281,7 +318,18 @@ fn s(item: &HashMap<String, AttributeValue>, key: &str) -> AppResult<String> {
         .ok_or_else(|| AppError::Other(anyhow::anyhow!("missing string attr {key}")))
 }
 
+fn n_u32(item: &HashMap<String, AttributeValue>, key: &str) -> AppResult<u32> {
+    parse_number(item, key)
+}
+
 fn n_u64(item: &HashMap<String, AttributeValue>, key: &str) -> AppResult<u64> {
+    parse_number(item, key)
+}
+
+fn parse_number<T: std::str::FromStr>(
+    item: &HashMap<String, AttributeValue>,
+    key: &str,
+) -> AppResult<T> {
     item.get(key)
         .and_then(|v| v.as_n().ok())
         .and_then(|n| n.parse().ok())
@@ -356,6 +404,24 @@ mod tests {
             !item.contains_key("cover_tone"),
             "cover_tone was removed from the Article contract"
         );
+    }
+
+    #[test]
+    fn reading_minutes_rejects_values_above_u32() {
+        // Arrange
+        let article = sample_article(vec![]);
+        let mut item = article_item(&article);
+        let too_big = u64::from(u32::MAX) + 1;
+        item.insert(
+            "reading_minutes".into(),
+            AttributeValue::N(too_big.to_string()),
+        );
+
+        // Act
+        let decoded = article_from_item(&item);
+
+        // Assert
+        assert!(decoded.is_err(), "reading_minutes must fit in u32");
     }
 
     #[test]

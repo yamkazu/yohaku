@@ -33,7 +33,7 @@ jobs:
         run: bash scripts/ci/run.sh web-build
 
   api:
-    name: API (fmt + clippy + build + test)
+    name: API (fmt + clippy + deny + build + test)
     runs-on: ubuntu-latest
     env:
       AWS_ACCESS_KEY_ID: local
@@ -68,6 +68,9 @@ jobs:
 
       - name: Clippy
         run: bash scripts/ci/run.sh api-clippy
+
+      - name: Cargo deny
+        run: bash scripts/ci/run.sh api-deny
 
       - name: Build
         run: bash scripts/ci/run.sh api-build

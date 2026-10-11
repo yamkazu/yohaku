@@ -1,0 +1,22 @@
+# License allow list and advisory policy for the API crate.
+# `scripts/ci/run.sh api-deny` runs this from CI and from `npm run verify`.
+
+[advisories]
+# Vulnerabilities fail the check. Yanked crates do too: they are not a safe pin.
+yanked = "deny"
+ignore = []
+
+[licenses]
+private = { ignore = true }
+confidence-threshold = 0.8
+include-dev = true
+# An `OR` expression passes when any one license is allowed. The list below is
+# the set that is actually required (a lone license, or a term of an `AND`).
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+]
+unused-allowed-license = "deny"

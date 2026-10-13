@@ -40,7 +40,8 @@ jobs:
         with:
           name: ci-failure-web
           path: .ci/
-          if-no-files-found: warn
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14
 
   api:
@@ -98,7 +99,8 @@ jobs:
         with:
           name: ci-failure-api
           path: .ci/
-          if-no-files-found: warn
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14
 
   e2e:
@@ -173,7 +175,8 @@ jobs:
         with:
           name: ci-failure-e2e
           path: .ci/
-          if-no-files-found: warn
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14
 
       - name: Upload Playwright report

@@ -1,27 +1,33 @@
-// `.verify/summary.json` を生成する。
-// 各ステップの成否、失敗時の `failedStep` と `logTail` を出力する。`verify.sh` から呼ばれる。
+// Summary JSON for a step run directory (`.verify/` locally, `.ci/` on GitHub Actions).
+// Emits each step's status plus `failedStep` / `logTail` on failure.
+// Called from `verify.sh` and `scripts/ci/step.sh`.
 //
-// 使い方:
-//   node scripts/verify-summary.mjs <verify-dir> <exit-code>
+// Usage:
+//   node scripts/verify-summary.mjs <summary-dir> <exit-code>
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 
 // Names shared with scripts/verify.sh EVIDENCE_SHOTS and the e2e spec.
 const evidenceNames = ['article-list.png', 'article-detail.png', 'not-found.png']
 
-const verifyDir = process.argv[2]
+const summaryDir = process.argv[2]
 const exitCode = Number(process.argv[3] ?? '1')
-if (!verifyDir) {
-  console.error('usage: verify-summary.mjs <verify-dir> <exit-code>')
+if (!summaryDir) {
+  console.error('usage: verify-summary.mjs <summary-dir> <exit-code>')
   process.exit(2)
 }
 
-const root = dirname(verifyDir)
-const stepsPath = join(verifyDir, 'steps.jsonl')
+const root = dirname(summaryDir)
+const dirLabel = basename(summaryDir)
+const stepsPath = join(summaryDir, 'steps.jsonl')
 const raw = existsSync(stepsPath) ? readFileSync(stepsPath, 'utf8').trim() : ''
 const steps = raw
   ? raw.split('\n').filter(Boolean).map((line) => JSON.parse(line))
   : []
+
+function repoRel(absPath) {
+  return relative(root, absPath).split('\\').join('/')
+}
 
 function tail(rel, lines = 80) {
   if (!rel) return null
@@ -37,22 +43,24 @@ function tail(rel, lines = 80) {
 const failed = steps.find((step) => step.status === 'failed') ?? null
 const ok = exitCode === 0 && !failed
 const anySkipped = steps.some((step) => step.status === 'skipped')
-const playwrightDir = join(verifyDir, 'playwright')
-const playwright = existsSync(playwrightDir) ? '.verify/playwright' : null
-const screenshotsDir = join(verifyDir, 'screenshots')
+const playwrightDir = join(summaryDir, 'playwright')
+const playwright = existsSync(playwrightDir) ? repoRel(playwrightDir) : null
+const screenshotsDir = join(summaryDir, 'screenshots')
 const screenshots = evidenceNames
   .filter((name) => existsSync(join(screenshotsDir, name)))
-  .map((name) => `.verify/screenshots/${name}`)
-const evidenceErrorPath = join(verifyDir, 'evidence-error.txt')
+  .map((name) => repoRel(join(screenshotsDir, name)))
+const evidenceErrorPath = join(summaryDir, 'evidence-error.txt')
 const evidenceError = existsSync(evidenceErrorPath)
   ? readFileSync(evidenceErrorPath, 'utf8').trim()
   : ''
 const serverLogs = {}
-if (existsSync(join(verifyDir, 'dynamodb-server.log'))) {
-  serverLogs.dynamodb = '.verify/dynamodb-server.log'
+const dynamodbLog = join(summaryDir, 'dynamodb-server.log')
+const apiLog = join(summaryDir, 'api-server.log')
+if (existsSync(dynamodbLog)) {
+  serverLogs.dynamodb = repoRel(dynamodbLog)
 }
-if (existsSync(join(verifyDir, 'api-server.log'))) {
-  serverLogs.api = '.verify/api-server.log'
+if (existsSync(apiLog)) {
+  serverLogs.api = repoRel(apiLog)
 }
 
 let message
@@ -66,7 +74,7 @@ if (ok) {
 } else if (evidenceError) {
   message = evidenceError
 } else {
-  message = `verify failed (exit ${exitCode})`
+  message = `${dirLabel} failed (exit ${exitCode})`
 }
 
 const includeApiTail =
@@ -82,8 +90,8 @@ const summary = {
   screenshots: screenshots.length ? screenshots : null,
   serverLogs,
   logTail: failed ? tail(failed.log) : null,
-  apiLogTail: includeApiTail ? tail('.verify/api-server.log', 40) : null,
+  apiLogTail: includeApiTail ? tail(repoRel(apiLog), 40) : null,
   steps,
 }
 
-writeFileSync(join(verifyDir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`)
+writeFileSync(join(summaryDir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`)

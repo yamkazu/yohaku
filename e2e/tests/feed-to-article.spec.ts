@@ -1,8 +1,19 @@
+import { readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 
-// verify.sh copies these into .verify/screenshots/ when e2e passes.
+// Filenames live in scripts/evidence-shots.json (single source for verify + e2e).
+const evidenceBasenames: string[] = (
+  JSON.parse(readFileSync(join(__dirname, '../../scripts/evidence-shots.json'), 'utf8')) as string[]
+).map((name) => name.replace(/\.png$/, ''))
+
 async function saveEvidence(page: Page, name: string) {
+  if (!evidenceBasenames.includes(name)) {
+    throw new Error(
+      `unknown evidence shot "${name}"; add "${name}.png" to scripts/evidence-shots.json`,
+    )
+  }
   await mkdir('test-results/evidence', { recursive: true })
   await page.screenshot({
     path: `test-results/evidence/${name}.png`,

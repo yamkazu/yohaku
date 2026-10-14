@@ -2,8 +2,9 @@
 # CI とローカルで共有するステップディスパッチャ。
 # 引数 1 つでステップ名を受け取り、対応するコマンドを実行する。
 #
-# ステップ: web-install, web-lint, web-build, dynamodb, api-fmt, api-clippy,
-# api-deny, api-build, api-test, api-start, e2e-install, playwright-install, e2e
+# ステップ: evidence-shots, web-install, web-lint, web-build, dynamodb, api-fmt,
+# api-clippy, api-deny, api-build, api-test, api-start, e2e-install,
+# playwright-install, e2e
 #
 # 使い方:
 #   bash scripts/ci/run.sh web-lint
@@ -17,6 +18,7 @@ usage() {
 usage: scripts/ci/run.sh <step>
 
 steps:
+  evidence-shots       assert evidence screenshot names use scripts/evidence-shots.json
   web-install          npm ci in web/
   web-lint             oxlint
   web-build            tsc + vite build
@@ -189,6 +191,9 @@ ensure_cargo_deny() {
 
 cmd="${1:-}"
 case "$cmd" in
+  evidence-shots)
+    node "$ROOT/scripts/check-evidence-shots.mjs"
+    ;;
   web-install)
     (cd "$ROOT/web" && npm ci)
     ;;

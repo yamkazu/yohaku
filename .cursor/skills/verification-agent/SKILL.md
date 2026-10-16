@@ -27,7 +27,7 @@ description: >-
 1. **コードを変えない。** コミット、ブランチ操作、ファイル編集、`git push`、マージ、デプロイはしない。
 2. 結果は **PR コメント 1 本**で報告する。PR 本文は書き換えない。
 3. 本番環境には当てない。ローカルの `npm run verify` と、それが起動する Web / API / DynamoDB Local だけを使う。
-4. スクリーンショットのファイル名は、このスキルに再定義しない。証拠は `.verify/summary.json` の `screenshots` 配列と、`docs/features.md` 末尾の一覧を読む。
+4. スクリーンショットのファイル名は、このスキルに再定義しない。正本は `scripts/evidence-shots.json`（`verify.sh` / `verify-summary.mjs` / e2e が読む）。証拠は `.verify/summary.json` の `screenshots` 配列と、`docs/features.md` 末尾の一覧を読む。
 5. 失敗ログは `summary.json` の構造化フィールド（`failedStep`、`failedLog`、`logTail`、`apiLogTail`、`serverLogs`、`message`）を引用する。ログ本文を手で要約して別表現に置き換えない。
 
 ## 流れ
@@ -84,7 +84,7 @@ issue に検証欄が無い場合は、その旨を報告して終了する（�
 3. 選んだ行について回帰を確かめる:
    - 表の「テスト」列が指すテストを、手順 2 の `verify`（または追加の `--only`）でカバーできていれば、その結果を使う。
    - カバーできていない行だけ、表の「たどり方」どおりにローカルで追加確認する（例: `curl` で API、または `npm run verify -- --only e2e`）。
-4. 画面の証拠が必要な行は、`summary.json` の `screenshots` をそのまま証拠欄に書く。ファイル名の正本は `docs/features.md` 末尾と `scripts/verify.sh` の `EVIDENCE_SHOTS` / `scripts/verify-summary.mjs` の `evidenceNames`（重複して並べ替えない）。
+4. 画面の証拠が必要な行は、`summary.json` の `screenshots` をそのまま証拠欄に書く。ファイル名の正本は `scripts/evidence-shots.json`（`docs/features.md` 末尾は同じ一覧の説明。スキル側で並べ替え・再定義しない）。
 
 影響する機能が一つも無い（純粋なエージェント向けドキュメントなど）ときは、その判断を報告に書き、機能ごとの回帰は「該当なし」とする。
 

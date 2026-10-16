@@ -6,9 +6,9 @@
 //   node scripts/verify-summary.mjs <summary-dir> <exit-code>
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
+import { loadEvidenceShots } from './evidence-shots.mjs'
 
-// Names shared with scripts/verify.sh EVIDENCE_SHOTS and the e2e spec.
-const evidenceNames = ['article-list.png', 'article-detail.png', 'not-found.png']
+const evidenceNames = loadEvidenceShots()
 
 const summaryDir = process.argv[2]
 const exitCode = Number(process.argv[3] ?? '1')

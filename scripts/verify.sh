@@ -20,6 +20,7 @@ STEPS_FILE="$VERIFY_DIR/steps.jsonl"
 # 全実行の順番。1行が1ステップ。足すときはこの配列に1行、本体は scripts/ci/run.sh。
 # --only が引き込む前提は step_deps だけに書く。前提が無いステップは step_deps を触らない。
 ALL_STEPS=(
+  evidence-shots
   web-install
   web-lint
   web-build
@@ -35,12 +36,17 @@ ALL_STEPS=(
   e2e
 )
 
-# e2e/tests/feed-to-article.spec.ts が test-results/evidence/ に書く。成功時も .verify/screenshots/ へ残す。
-EVIDENCE_SHOTS=(
-  article-list.png
-  article-detail.png
-  not-found.png
-)
+# Filenames from scripts/evidence-shots.json (single source; see check-evidence-shots.mjs).
+EVIDENCE_SHOTS=()
+while IFS= read -r _evidence_shot; do
+  [[ -n "$_evidence_shot" ]] || continue
+  EVIDENCE_SHOTS+=("$_evidence_shot")
+done < <(node "$ROOT/scripts/evidence-shots.mjs")
+if [[ ${#EVIDENCE_SHOTS[@]} -eq 0 ]]; then
+  echo "failed to load scripts/evidence-shots.json via evidence-shots.mjs" >&2
+  exit 1
+fi
+
 
 FAILED_STEP=""
 CLEANED=0

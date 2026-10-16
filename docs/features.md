@@ -14,7 +14,7 @@
 | 存在しない slug | Web `/articles/does-not-exist-slug` | 「記事が見つかりませんでした。」と、リンク「フィードに戻る」 | `e2e/tests/feed-to-article.spec.ts` の `unknown slug shows not-found state` |
 | 存在しない slug | `GET /articles/{slug}`。例は `GET /articles/does-not-exist-slug` | `404`。`{"error":"not found"}` | `api/tests/http_ddb.rs` の `unknown_slug_returns_404` |
 
-`npm run verify` または `npm run verify -- --only e2e` が成功したあと、画面の証拠が `.verify/screenshots/` に残る。
+`npm run verify` または `npm run verify -- --only e2e` が成功したあと、画面の証拠が `.verify/screenshots/` に残る。ファイル名の正本は `scripts/evidence-shots.json`（`verify.sh` / `verify-summary.mjs` / e2e が読む。`npm run verify -- --only evidence-shots` で複製を落とす）。
 
 - `article-list.png` — 記事一覧
 - `article-detail.png` — 記事詳細

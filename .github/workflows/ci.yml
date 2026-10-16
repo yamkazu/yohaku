@@ -23,6 +23,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: evidence-shots
+        run: bash scripts/ci/run.sh evidence-shots
+
       - name: Install dependencies
         run: bash scripts/ci/run.sh web-install
 

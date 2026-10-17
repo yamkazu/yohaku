@@ -35,13 +35,21 @@ if (keyNames.join(",") !== "pk:HASH,sk:RANGE") {
 if (table.BillingMode !== "PAY_PER_REQUEST") {
   throw new Error(`billing ${table.BillingMode}`);
 }
-const gsi = table.GlobalSecondaryIndexes?.find((index) => index.IndexName === "gsi1");
-if (!gsi || gsi.Projection.ProjectionType !== "ALL") {
+const gsi1 = table.GlobalSecondaryIndexes?.find((index) => index.IndexName === "gsi1");
+if (!gsi1 || gsi1.Projection.ProjectionType !== "ALL") {
   throw new Error("missing gsi1 ALL");
 }
-const gsiKeys = gsi.KeySchema.map((key) => `${key.AttributeName}:${key.KeyType}`).sort();
-if (gsiKeys.join(",") !== "gsi1pk:HASH,gsi1sk:RANGE") {
-  throw new Error(`gsi keys ${gsiKeys.join(",")}`);
+const gsi1Keys = gsi1.KeySchema.map((key) => `${key.AttributeName}:${key.KeyType}`).sort();
+if (gsi1Keys.join(",") !== "gsi1pk:HASH,gsi1sk:RANGE") {
+  throw new Error(`gsi1 keys ${gsi1Keys.join(",")}`);
+}
+const gsi2 = table.GlobalSecondaryIndexes?.find((index) => index.IndexName === "gsi2");
+if (!gsi2 || gsi2.Projection.ProjectionType !== "ALL") {
+  throw new Error("missing gsi2 ALL");
+}
+const gsi2Keys = gsi2.KeySchema.map((key) => `${key.AttributeName}:${key.KeyType}`).sort();
+if (gsi2Keys.join(",") !== "gsi2pk:HASH,gsi2sk:RANGE") {
+  throw new Error(`gsi2 keys ${gsi2Keys.join(",")}`);
 }
 
 const functions = byType("AWS::Lambda::Function").filter(

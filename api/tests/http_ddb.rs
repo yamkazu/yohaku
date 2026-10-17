@@ -137,6 +137,69 @@ async fn list_articles_returns_seeded_rows() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn list_articles_is_newest_published_at_first() -> anyhow::Result<()> {
+    // Arrange — seed samples are 2026-09-24, 09-22, 09-18 (newest first in API)
+    let expected_slugs = [
+        "whitespace-as-product-design",
+        "typescript-narrowing-habits",
+        "quiet-apis",
+    ];
+
+    // Act
+    let (status, json) = json_get("/articles").await?;
+
+    // Assert
+    assert_status(status, StatusCode::OK, &json);
+    let articles = json.as_array().expect("array");
+    let sample_slugs: Vec<&str> = articles
+        .iter()
+        .filter_map(|a| a["slug"].as_str())
+        .filter(|slug| expected_slugs.contains(slug))
+        .collect();
+    assert_eq!(
+        sample_slugs, expected_slugs,
+        "public list must keep newest-published_at-first order from DynamoDB gsi2"
+    );
+    let published: Vec<&str> = articles
+        .iter()
+        .filter_map(|a| a["published_at"].as_str())
+        .collect();
+    let mut sorted = published.clone();
+    sorted.sort_by(|a, b| b.cmp(a));
+    assert_eq!(
+        published, sorted,
+        "published_at values must be non-increasing"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn article_count_matches_seeded_store_rows() -> anyhow::Result<()> {
+    // Arrange
+    let table = shared_table().await?;
+    let store = DynamoStore::connect_with_table(table).await?;
+    let samples = seed::sample_articles()?;
+    let expected = samples.len() + 1; // samples + canary (canary hidden only at HTTP layer)
+
+    // Act
+    let count = store.article_count().await?;
+    let listed = store.list_articles().await?;
+
+    // Assert
+    assert_eq!(
+        count, expected,
+        "article_count must equal seeded rows without scanning the table"
+    );
+    assert_eq!(
+        listed.len(),
+        count,
+        "list_articles length must match article_count"
+    );
+    assert!(listed.iter().any(|a| a.slug == seed::CANARY_SLUG));
+    Ok(())
+}
+
+#[tokio::test]
 async fn canary_is_readable_by_slug_but_hidden_from_the_list() -> anyhow::Result<()> {
     // Arrange
     let list_path = "/articles";

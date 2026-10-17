@@ -3,11 +3,10 @@ import type { Article } from '../lib/api'
 import { formatDate } from '../lib/api'
 
 export function ArticleRow({ article, index }: { article: Article; index: number }) {
+  // Stagger via CSS classes — inline style= would violate style-src without unsafe-inline.
+  const delayClass = index < 8 ? `animate-rise-delay-${index}` : 'animate-rise-delay-7'
   return (
-    <article
-      className="animate-rise border-b border-line py-8 last:border-b-0"
-      style={{ animationDelay: `${index * 70}ms` }}
-    >
+    <article className={`animate-rise ${delayClass} border-b border-line py-8 last:border-b-0`}>
       <Link to={`/articles/${article.slug}`} className="group grid gap-5 sm:grid-cols-[1fr_140px] sm:items-center">
         <div className="min-w-0">
           <div className="mb-3 flex items-center gap-2 text-xs text-muted">

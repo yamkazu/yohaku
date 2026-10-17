@@ -52,6 +52,34 @@
   animation: rise 0.55s ease both;
 }
 
+.animate-rise-delay-0 {
+  animation-delay: 0ms;
+}
+.animate-rise-delay-1 {
+  animation-delay: 70ms;
+}
+.animate-rise-delay-2 {
+  animation-delay: 140ms;
+}
+.animate-rise-delay-3 {
+  animation-delay: 210ms;
+}
+.animate-rise-delay-4 {
+  animation-delay: 280ms;
+}
+.animate-rise-delay-5 {
+  animation-delay: 350ms;
+}
+.animate-rise-delay-6 {
+  animation-delay: 420ms;
+}
+.animate-rise-delay-7 {
+  animation-delay: 490ms;
+}
+.animate-rise-delay-body {
+  animation-delay: 80ms;
+}
+
 .animate-soft {
   animation: soft-in 0.4s ease both;
 }

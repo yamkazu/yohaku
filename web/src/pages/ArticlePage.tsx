@@ -82,7 +82,7 @@ function ArticleView({ slug }: { slug: string }) {
         </div>
       </header>
 
-      <div className="animate-rise mt-10 space-y-5 text-[1.05rem] leading-[1.9] text-ink/90" style={{ animationDelay: '80ms' }}>
+      <div className="animate-rise animate-rise-delay-body mt-10 space-y-5 text-[1.05rem] leading-[1.9] text-ink/90">
         {paragraphs.map((block, i) => {
           if (block.startsWith('## ')) {
             return (

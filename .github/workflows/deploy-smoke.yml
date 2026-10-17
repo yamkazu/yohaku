@@ -19,7 +19,7 @@ jobs:
     name: public surface
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -37,3 +37,30 @@ jobs:
         env:
           SITE_URL: ${{ steps.site.outputs.url }}
         run: bash scripts/deploy-smoke.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install e2e dependencies
+        run: bash scripts/ci/run.sh e2e-install
+
+      - name: Install Playwright Chromium
+        run: bash scripts/ci/run.sh playwright-install
+
+      - name: Check CSP in the browser
+        env:
+          SITE_URL: ${{ steps.site.outputs.url }}
+          CSP_ARTIFACT_DIR: csp-browser-artifacts
+        run: node scripts/csp-browser-check.mjs
+
+      - name: Upload CSP browser artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csp-browser-artifacts
+          path: csp-browser-artifacts
+          if-no-files-found: ignore
+          retention-days: 7

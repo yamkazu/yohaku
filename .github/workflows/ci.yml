@@ -14,6 +14,8 @@ jobs:
   web:
     name: Web (lint + build)
     runs-on: ubuntu-latest
+    env:
+      CI_SUMMARY_DIR: ${{ github.workspace }}/.ci
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +26,26 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: evidence-shots
-        run: bash scripts/ci/run.sh evidence-shots
+        run: bash scripts/ci/step.sh evidence-shots
 
-      - name: Install dependencies
-        run: bash scripts/ci/run.sh web-install
+      - name: web-install
+        run: bash scripts/ci/step.sh web-install
 
-      - name: Lint
-        run: bash scripts/ci/run.sh web-lint
+      - name: web-lint
+        run: bash scripts/ci/step.sh web-lint
 
-      - name: Build
-        run: bash scripts/ci/run.sh web-build
+      - name: web-build
+        run: bash scripts/ci/step.sh web-build
+
+      - name: Upload CI failure summary
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-web
+          path: .ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   api:
     name: API (fmt + clippy + build + test)
@@ -45,6 +57,9 @@ jobs:
       DYNAMODB_ENDPOINT: http://127.0.0.1:8000
       YOHAKU_TABLE: yohaku-ci
       DYNAMODB_PORT: "8000"
+      CI_SUMMARY_DIR: ${{ github.workspace }}/.ci
+      DYNAMODB_LOG: ${{ github.workspace }}/.ci/dynamodb-server.log
+      DYNAMODB_PID_FILE: ${{ github.workspace }}/.ci/dynamodb.pid
     steps:
       - uses: actions/checkout@v4
 
@@ -63,23 +78,33 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Start DynamoDB Local
-        run: bash scripts/ci/run.sh dynamodb
+      - name: dynamodb
+        run: bash scripts/ci/step.sh dynamodb
 
-      - name: Format check
-        run: bash scripts/ci/run.sh api-fmt
+      - name: api-fmt
+        run: bash scripts/ci/step.sh api-fmt
 
-      - name: Clippy
-        run: bash scripts/ci/run.sh api-clippy
+      - name: api-clippy
+        run: bash scripts/ci/step.sh api-clippy
 
-      - name: Cargo deny
-        run: bash scripts/ci/run.sh api-deny
+      - name: api-deny
+        run: bash scripts/ci/step.sh api-deny
 
-      - name: Build
-        run: bash scripts/ci/run.sh api-build
+      - name: api-build
+        run: bash scripts/ci/step.sh api-build
 
-      - name: Test (unit + DynamoDB Local integration)
-        run: bash scripts/ci/run.sh api-test
+      - name: api-test
+        run: bash scripts/ci/step.sh api-test
+
+      - name: Upload CI failure summary
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-api
+          path: .ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   e2e:
     name: E2E (Playwright user harness)
@@ -94,6 +119,11 @@ jobs:
       PORT: "3848"
       VITE_API_URL: http://127.0.0.1:3848
       CI: true
+      CI_SUMMARY_DIR: ${{ github.workspace }}/.ci
+      DYNAMODB_LOG: ${{ github.workspace }}/.ci/dynamodb-server.log
+      DYNAMODB_PID_FILE: ${{ github.workspace }}/.ci/dynamodb.pid
+      API_LOG: ${{ github.workspace }}/.ci/api-server.log
+      API_PID_FILE: ${{ github.workspace }}/.ci/api.pid
     steps:
       - uses: actions/checkout@v4
 
@@ -118,29 +148,39 @@ jobs:
             web/package-lock.json
             e2e/package-lock.json
 
-      - name: Start DynamoDB Local
-        run: bash scripts/ci/run.sh dynamodb
+      - name: dynamodb
+        run: bash scripts/ci/step.sh dynamodb
 
-      - name: Build API
-        run: bash scripts/ci/run.sh api-build
+      - name: api-build
+        run: bash scripts/ci/step.sh api-build
 
-      - name: Start API
-        run: bash scripts/ci/run.sh api-start
+      - name: api-start
+        run: bash scripts/ci/step.sh api-start
 
-      - name: Install web dependencies
-        run: bash scripts/ci/run.sh web-install
+      - name: web-install
+        run: bash scripts/ci/step.sh web-install
 
-      - name: Build web
-        run: bash scripts/ci/run.sh web-build
+      - name: web-build
+        run: bash scripts/ci/step.sh web-build
 
-      - name: Install e2e dependencies
-        run: bash scripts/ci/run.sh e2e-install
+      - name: e2e-install
+        run: bash scripts/ci/step.sh e2e-install
 
-      - name: Install Playwright Chromium
-        run: bash scripts/ci/run.sh playwright-install
+      - name: playwright-install
+        run: bash scripts/ci/step.sh playwright-install
 
-      - name: Run user harness (feed → article)
-        run: bash scripts/ci/run.sh e2e
+      - name: e2e
+        run: bash scripts/ci/step.sh e2e
+
+      - name: Upload CI failure summary
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-e2e
+          path: .ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload Playwright report
         if: failure()

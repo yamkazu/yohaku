@@ -263,7 +263,7 @@ impl DynamoStore {
         Ok(total)
     }
 
-    /// List articles, newest `published_at` first (DynamoDB `gsi2` order).
+    /// List articles, newest `published_at` first (`DynamoDB` `gsi2` order).
     ///
     /// # Errors
     ///

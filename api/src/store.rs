@@ -11,8 +11,9 @@ use std::time::Duration;
 use aws_sdk_dynamodb::error::{BuildError, SdkError};
 use aws_sdk_dynamodb::operation::describe_table::DescribeTableError;
 use aws_sdk_dynamodb::types::{
-    AttributeDefinition, AttributeValue, BillingMode, GlobalSecondaryIndex, KeySchemaElement,
-    KeyType, Projection, ProjectionType, ScalarAttributeType, TableStatus,
+    AttributeDefinition, AttributeValue, BillingMode, CreateGlobalSecondaryIndexAction,
+    GlobalSecondaryIndex, GlobalSecondaryIndexUpdate, IndexStatus, KeySchemaElement, KeyType,
+    Projection, ProjectionType, ScalarAttributeType, Select, TableStatus,
 };
 use aws_sdk_dynamodb::Client;
 use chrono::{DateTime, Utc};
@@ -24,6 +25,13 @@ use crate::models::{Article, AuthorSummary};
 const ACTIVE_WAIT_ATTEMPTS: u32 = 40;
 /// Pause between describe calls while a new table is being created.
 const ACTIVE_WAIT_PAUSE: Duration = Duration::from_millis(100);
+
+/// Slug lookup index (`gsi1pk` = `SLUG#{slug}`).
+const GSI_SLUG: &str = "gsi1";
+/// Publish-date feed index (`gsi2pk` = [`FEED_PK`], `gsi2sk` = RFC3339 `published_at`).
+const GSI_FEED: &str = "gsi2";
+/// Shared partition value for every article row in [`GSI_FEED`].
+const FEED_PK: &str = "ARTICLE";
 
 pub struct DynamoStore {
     client: Client,
@@ -79,13 +87,16 @@ impl DynamoStore {
         Ok(Self { client, table })
     }
 
-    /// Create the table and its slug index when they are missing, then wait until the table is active.
+    /// Create the table and its indexes when they are missing, then wait until ready.
+    ///
+    /// When the table already exists, missing feed index [`GSI_FEED`] is added in place
+    /// (no table delete). Callers with pre-GSI rows should reseed or backfill `gsi2*` attrs.
     ///
     /// # Errors
     ///
     /// Returns an error when describing the table fails for a reason other than
-    /// the table not existing, when the table cannot be created, or when the table
-    /// does not become active before the wait expires.
+    /// the table not existing, when the table or index cannot be created, or when
+    /// the table / index does not become active before the wait expires.
     pub async fn ensure_schema(&self) -> AppResult<()> {
         let described = self
             .client
@@ -95,6 +106,7 @@ impl DynamoStore {
             .await
             .map(|_| ());
         if table_presence(described)? {
+            self.ensure_feed_gsi().await?;
             return Ok(());
         }
 
@@ -102,6 +114,10 @@ impl DynamoStore {
         self.create_table().await?;
         wait_until_active(&self.table, ACTIVE_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
             self.table_is_active()
+        })
+        .await?;
+        wait_until_active(&self.table, ACTIVE_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
+            self.index_is_active(GSI_FEED)
         })
         .await
     }
@@ -115,23 +131,58 @@ impl DynamoStore {
             .attribute_definitions(attr("sk", ScalarAttributeType::S)?)
             .attribute_definitions(attr("gsi1pk", ScalarAttributeType::S)?)
             .attribute_definitions(attr("gsi1sk", ScalarAttributeType::S)?)
+            .attribute_definitions(attr("gsi2pk", ScalarAttributeType::S)?)
+            .attribute_definitions(attr("gsi2sk", ScalarAttributeType::S)?)
             .key_schema(key("pk", KeyType::Hash)?)
             .key_schema(key("sk", KeyType::Range)?)
-            .global_secondary_indexes(
-                GlobalSecondaryIndex::builder()
-                    .index_name("gsi1")
-                    .key_schema(key("gsi1pk", KeyType::Hash)?)
-                    .key_schema(key("gsi1sk", KeyType::Range)?)
-                    .projection(
-                        Projection::builder()
-                            .projection_type(ProjectionType::All)
-                            .build(),
-                    )
-                    .build()?,
-            )
+            .global_secondary_indexes(slug_gsi()?)
+            .global_secondary_indexes(feed_gsi()?)
             .send()
             .await?;
         Ok(())
+    }
+
+    /// Add [`GSI_FEED`] when an older local/dev table was created without it.
+    async fn ensure_feed_gsi(&self) -> AppResult<()> {
+        if self.index_is_active(GSI_FEED).await? {
+            return Ok(());
+        }
+        if self.index_present(GSI_FEED).await? {
+            tracing::info!(table = %self.table, index = GSI_FEED, "waiting for feed GSI");
+            return wait_until_active(&self.table, ACTIVE_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
+                self.index_is_active(GSI_FEED)
+            })
+            .await;
+        }
+
+        tracing::info!(table = %self.table, index = GSI_FEED, "adding feed GSI");
+        self.client
+            .update_table()
+            .table_name(&self.table)
+            .attribute_definitions(attr("gsi2pk", ScalarAttributeType::S)?)
+            .attribute_definitions(attr("gsi2sk", ScalarAttributeType::S)?)
+            .global_secondary_index_updates(
+                GlobalSecondaryIndexUpdate::builder()
+                    .create(
+                        CreateGlobalSecondaryIndexAction::builder()
+                            .index_name(GSI_FEED)
+                            .key_schema(key("gsi2pk", KeyType::Hash)?)
+                            .key_schema(key("gsi2sk", KeyType::Range)?)
+                            .projection(
+                                Projection::builder()
+                                    .projection_type(ProjectionType::All)
+                                    .build(),
+                            )
+                            .build()?,
+                    )
+                    .build(),
+            )
+            .send()
+            .await?;
+        wait_until_active(&self.table, ACTIVE_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
+            self.index_is_active(GSI_FEED)
+        })
+        .await
     }
 
     async fn table_is_active(&self) -> AppResult<bool> {
@@ -147,20 +198,76 @@ impl DynamoStore {
             .is_some_and(|status| status == TableStatus::Active))
     }
 
-    /// Count stored articles.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the table scan fails or an item cannot be decoded.
-    pub async fn article_count(&self) -> AppResult<usize> {
-        Ok(self.list_articles().await?.len())
+    async fn index_present(&self, index_name: &str) -> AppResult<bool> {
+        Ok(self.index_status(index_name).await?.is_some())
     }
 
-    /// List articles, newest `published_at` first.
+    async fn index_is_active(&self, index_name: &str) -> AppResult<bool> {
+        Ok(self
+            .index_status(index_name)
+            .await?
+            .is_some_and(|status| status == IndexStatus::Active))
+    }
+
+    async fn index_status(&self, index_name: &str) -> AppResult<Option<IndexStatus>> {
+        let output = self
+            .client
+            .describe_table()
+            .table_name(&self.table)
+            .send()
+            .await?;
+        Ok(output
+            .table
+            .and_then(|table| table.global_secondary_indexes)
+            .into_iter()
+            .flatten()
+            .find(|index| index.index_name.as_deref() == Some(index_name))
+            .and_then(|index| index.index_status))
+    }
+
+    /// Count stored articles via the feed index (`Select::Count`), without a table scan.
     ///
     /// # Errors
     ///
-    /// Returns an error when the table scan fails or an item cannot be decoded.
+    /// Returns an error when the feed query fails.
+    pub async fn article_count(&self) -> AppResult<usize> {
+        let mut total = 0usize;
+        let mut start_key = None;
+
+        loop {
+            let mut req = self
+                .client
+                .query()
+                .table_name(&self.table)
+                .index_name(GSI_FEED)
+                .key_condition_expression("gsi2pk = :pk")
+                .expression_attribute_values(":pk", AttributeValue::S(FEED_PK.into()))
+                .select(Select::Count);
+
+            if let Some(key) = start_key.take() {
+                req = req.set_exclusive_start_key(Some(key));
+            }
+
+            let out = req.send().await?;
+            let page = out.count();
+            total = total.saturating_add(usize::try_from(page).map_err(|_| {
+                AppError::Other(anyhow::anyhow!("article count page overflowed usize"))
+            })?);
+
+            if out.last_evaluated_key().is_none() {
+                break;
+            }
+            start_key = out.last_evaluated_key().cloned();
+        }
+
+        Ok(total)
+    }
+
+    /// List articles, newest `published_at` first (DynamoDB `gsi2` order).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the feed query fails or an item cannot be decoded.
     pub async fn list_articles(&self) -> AppResult<Vec<Article>> {
         let mut articles = Vec::new();
         let mut start_key = None;
@@ -168,10 +275,12 @@ impl DynamoStore {
         loop {
             let mut req = self
                 .client
-                .scan()
+                .query()
                 .table_name(&self.table)
-                .filter_expression("entity = :entity")
-                .expression_attribute_values(":entity", AttributeValue::S("ARTICLE".into()));
+                .index_name(GSI_FEED)
+                .key_condition_expression("gsi2pk = :pk")
+                .expression_attribute_values(":pk", AttributeValue::S(FEED_PK.into()))
+                .scan_index_forward(false);
 
             if let Some(key) = start_key.take() {
                 req = req.set_exclusive_start_key(Some(key));
@@ -188,7 +297,6 @@ impl DynamoStore {
             start_key = out.last_evaluated_key().cloned();
         }
 
-        articles.sort_by(|a, b| b.published_at.cmp(&a.published_at));
         Ok(articles)
     }
 
@@ -202,7 +310,7 @@ impl DynamoStore {
             .client
             .query()
             .table_name(&self.table)
-            .index_name("gsi1")
+            .index_name(GSI_SLUG)
             .key_condition_expression("gsi1pk = :pk")
             .expression_attribute_values(":pk", AttributeValue::S(format!("SLUG#{slug}")))
             .limit(1)
@@ -293,7 +401,38 @@ fn article_item(article: &Article) -> HashMap<String, AttributeValue> {
         AttributeValue::S(format!("SLUG#{}", article.slug)),
     );
     item.insert("gsi1sk".into(), AttributeValue::S("ARTICLE".into()));
+    item.insert("gsi2pk".into(), AttributeValue::S(FEED_PK.into()));
+    item.insert(
+        "gsi2sk".into(),
+        AttributeValue::S(article.published_at.to_rfc3339()),
+    );
     item
+}
+
+fn slug_gsi() -> AppResult<GlobalSecondaryIndex> {
+    Ok(GlobalSecondaryIndex::builder()
+        .index_name(GSI_SLUG)
+        .key_schema(key("gsi1pk", KeyType::Hash)?)
+        .key_schema(key("gsi1sk", KeyType::Range)?)
+        .projection(
+            Projection::builder()
+                .projection_type(ProjectionType::All)
+                .build(),
+        )
+        .build()?)
+}
+
+fn feed_gsi() -> AppResult<GlobalSecondaryIndex> {
+    Ok(GlobalSecondaryIndex::builder()
+        .index_name(GSI_FEED)
+        .key_schema(key("gsi2pk", KeyType::Hash)?)
+        .key_schema(key("gsi2sk", KeyType::Range)?)
+        .projection(
+            Projection::builder()
+                .projection_type(ProjectionType::All)
+                .build(),
+        )
+        .build()?)
 }
 
 fn article_from_item(item: &HashMap<String, AttributeValue>) -> AppResult<Article> {
@@ -730,5 +869,26 @@ mod tests {
         assert!(back.tags.is_empty());
         assert_eq!(back.slug, original.slug);
         assert_eq!(back.title, original.title);
+    }
+
+    #[test]
+    fn article_item_sets_feed_gsi_keys_from_published_at() {
+        // Arrange
+        let article = sample_article(vec![]);
+
+        // Act
+        let item = article_item(&article);
+
+        // Assert
+        assert_eq!(
+            item.get("gsi2pk")
+                .and_then(|v| v.as_s().ok())
+                .map(String::as_str),
+            Some(FEED_PK)
+        );
+        assert_eq!(
+            item.get("gsi2sk").and_then(|v| v.as_s().ok()).cloned(),
+            Some(article.published_at.to_rfc3339())
+        );
     }
 }

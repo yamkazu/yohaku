@@ -110,6 +110,13 @@ export class YohakuStack extends Stack {
       sortKey: { name: "gsi1sk", type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    // Feed: Query all articles ordered by published_at (gsi2sk = RFC3339).
+    table.addGlobalSecondaryIndex({
+      indexName: "gsi2",
+      partitionKey: { name: "gsi2pk", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "gsi2sk", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
 
     const api = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.PROVIDED_AL2023,

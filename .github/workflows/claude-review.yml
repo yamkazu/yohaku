@@ -1,0 +1,107 @@
+name: Claude review
+
+# 全 PR に Claude のコードレビューを付ける。ラウンドの数え方と止め方は docs/code-review.md。
+# 認証はサブスクの OAuth トークン（`claude setup-token`）。API キーは使わない。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  MAX_ROUNDS: "3"
+
+jobs:
+  review:
+    name: Claude review
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Decide round
+        id: round
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash scripts/ci/review-round.sh
+          echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Ask to rethink instead of reviewing again
+        if: steps.round.outputs.action == 'cap'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR" --body "<!-- claude-review cap -->
+          Claude のレビューは ${MAX_ROUNDS} ラウンドに達したので、これ以上は行コメントを付けません。
+          指摘と修正が往復し続けているなら、修正を重ねるより、やり方そのものを見直してください。人が読んで判断する段階です。"
+
+      - name: Stop for a human
+        if: steps.round.outputs.action == 'cap' || steps.round.outputs.action == 'capped'
+        run: |
+          echo "::error::Claude review reached ${MAX_ROUNDS} rounds; a human needs to look at this PR"
+          exit 1
+
+      - name: Review
+        if: steps.round.outputs.action == 'review'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Review pull request ${{ github.repository }}#${{ github.event.pull_request.number }} by running the `/code-review` skill with the arguments `--comment ${{ github.event.pull_request.html_url }}`.
+
+            This is review round ${{ steps.round.outputs.round }} of at most ${{ env.MAX_ROUNDS }}.
+            ${{ steps.round.outputs.since && format('Earlier rounds already reviewed the PR up to {0}. Review only the changes in `git diff {0} {1}`; treat the rest of the PR as already reviewed.', steps.round.outputs.since, github.event.pull_request.head.sha) || 'Review the whole PR.' }}
+
+            - If `REVIEW.md` exists at the repository root, read it and apply it as extra review guidance. If it does not exist, skip this.
+            - Start each inline comment with one label: **Important** (should be fixed before merge), **Nit** (minor, optional), or **Pre-existing** (a problem the PR did not introduce).
+            - Read the existing review comments on the PR (`gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`) and do not post a finding that is already there.
+            - When you are done, post one short summary comment with `gh pr comment`, even when there are no findings. The round counts only if a comment was posted.
+          claude_args: >-
+            --allowedTools "Skill,Agent,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*),mcp__github_inline_comment__create_inline_comment"
+
+      - name: Record round
+        if: steps.round.outputs.action == 'review'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ROUND: ${{ steps.round.outputs.round }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          STARTED: ${{ steps.round.outputs.started }}
+        run: |
+          # レビューが何も書かずに成功したら、ラウンドに数えない。
+          posted=0
+          for kind in issues pulls; do
+            n="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/${kind}/${PR}/comments" \
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and .created_at >= \"${STARTED}\") | .id" | wc -l)"
+            posted=$((posted + n))
+          done
+          if [[ "$posted" -eq 0 ]]; then
+            echo "::error::Claude finished without posting any comment; round ${ROUND} is not recorded"
+            exit 1
+          fi
+          gh pr comment "$PR" --body "<!-- claude-review round=${ROUND} sha=${HEAD_SHA} -->
+          Claude レビュー ${ROUND}/${MAX_ROUNDS} ラウンド目を ${HEAD_SHA:0:7} まで済ませました。次の push では、ここからの差分だけを見ます。"
+
+      - name: Fail on unresolved Important
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash scripts/ci/review-important.sh

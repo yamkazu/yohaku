@@ -5,7 +5,8 @@
 #
 #   action=review  round=<N>  since=<前回レビューした SHA。1ラウンド目は空>
 #   action=cap     上限を超えた。見直しを促すコメントをまだ出していない
-#   action=skip    このコミットはレビュー済み、または上限のコメントも出し済み
+#   action=capped  上限を超えていて、そのコメントも出し済み
+#   action=skip    このコミットはレビュー済み
 #
 # 使い方（workflow から）:
 #   GH_TOKEN=... REPO=owner/name PR=12 HEAD_SHA=... MAX_ROUNDS=3 bash scripts/ci/review-round.sh
@@ -30,7 +31,7 @@ fi
 round=$((done_count + 1))
 if (( round > MAX_ROUNDS )); then
   if grep -q '<!-- claude-review cap -->' <<<"$bodies"; then
-    echo "action=skip" >>"$OUT"
+    echo "action=capped" >>"$OUT"
   else
     echo "action=cap" >>"$OUT"
   fi

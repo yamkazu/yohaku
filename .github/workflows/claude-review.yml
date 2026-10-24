@@ -51,6 +51,12 @@ jobs:
           Claude のレビューは ${MAX_ROUNDS} ラウンドに達したので、これ以上は行コメントを付けません。
           指摘と修正が往復し続けているなら、修正を重ねるより、やり方そのものを見直してください。人が読んで判断する段階です。"
 
+      - name: Stop for a human
+        if: steps.round.outputs.action == 'cap' || steps.round.outputs.action == 'capped'
+        run: |
+          echo "::error::Claude review reached ${MAX_ROUNDS} rounds; a human needs to look at this PR"
+          exit 1
+
       - name: Review
         if: steps.round.outputs.action == 'review'
         uses: anthropics/claude-code-action@v1

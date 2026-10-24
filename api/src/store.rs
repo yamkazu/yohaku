@@ -25,6 +25,9 @@ use crate::models::{Article, AuthorSummary};
 const ACTIVE_WAIT_ATTEMPTS: u32 = 40;
 /// Pause between describe calls while a new table is being created.
 const ACTIVE_WAIT_PAUSE: Duration = Duration::from_millis(100);
+/// How many times to describe a GSI added to an existing table before giving up.
+/// Building an index over existing rows takes longer than creating an empty table.
+const INDEX_WAIT_ATTEMPTS: u32 = 300;
 
 /// Slug lookup index (`gsi1pk` = `SLUG#{slug}`).
 const GSI_SLUG: &str = "gsi1";
@@ -90,7 +93,9 @@ impl DynamoStore {
     /// Create the table and its indexes when they are missing, then wait until ready.
     ///
     /// When the table already exists, missing feed index [`GSI_FEED`] is added in place
-    /// (no table delete). Callers with pre-GSI rows should reseed or backfill `gsi2*` attrs.
+    /// (no table delete). Rows written before the index have no `gsi2*` attrs, so the
+    /// feed reads them as empty; [`crate::seed::seed_if_empty`] then re-puts the sample
+    /// articles under their fixed ids, which fills in the attrs.
     ///
     /// # Errors
     ///
@@ -149,14 +154,15 @@ impl DynamoStore {
         }
         if self.index_present(GSI_FEED).await? {
             tracing::info!(table = %self.table, index = GSI_FEED, "waiting for feed GSI");
-            return wait_until_active(&self.table, ACTIVE_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
+            return wait_until_active(&self.table, INDEX_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
                 self.index_is_active(GSI_FEED)
             })
             .await;
         }
 
         tracing::info!(table = %self.table, index = GSI_FEED, "adding feed GSI");
-        self.client
+        let added = self
+            .client
             .update_table()
             .table_name(&self.table)
             .attribute_definitions(attr("gsi2pk", ScalarAttributeType::S)?)
@@ -178,8 +184,14 @@ impl DynamoStore {
                     .build(),
             )
             .send()
-            .await?;
-        wait_until_active(&self.table, ACTIVE_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
+            .await;
+        // A concurrent cold start may have added the index first; wait for it then.
+        if let Err(err) = added {
+            if !self.index_present(GSI_FEED).await? {
+                return Err(err.into());
+            }
+        }
+        wait_until_active(&self.table, INDEX_WAIT_ATTEMPTS, ACTIVE_WAIT_PAUSE, || {
             self.index_is_active(GSI_FEED)
         })
         .await

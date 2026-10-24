@@ -1,0 +1,49 @@
+name: Claude security review
+
+# 全 PR に Claude の `/security-review` を回す。観点と除外は SECURITY_REVIEW.md。
+# 認証はサブスクの OAuth トークン（`claude setup-token`）。API キーは使わない。
+# 必須チェックにはしていない。誤検知の閉じ方は docs/code-review.md。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: claude-security-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security-review:
+    name: Claude security review
+    # draft でも回す（検証用 draft と WIP の早期検知のため）。fork は除外。
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Security review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Review pull request ${{ github.repository }}#${{ github.event.pull_request.number }} for security issues by running the `/security-review` skill.
+
+            The PR URL is ${{ github.event.pull_request.html_url }}.
+            Base the review on `git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }}` (changes introduced by this PR only).
+
+            - If `SECURITY_REVIEW.md` exists at the repository root, read it and apply it as extra guidance (focus areas and exclusions). If it does not exist, skip this.
+            - Post each HIGH or MEDIUM finding as an inline review comment on the relevant changed line. Start each inline comment with **Security**.
+            - Read the existing review comments on the PR (`gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`) and do not post a finding that is already there.
+            - Do not fix the code. Report only.
+            - When you are done, post one short summary comment with `gh pr comment`, even when there are no findings. Say clearly whether `/security-review` ran and how many findings you posted.
+          claude_args: >-
+            --allowedTools "Skill,Agent,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git remote:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*),mcp__github_inline_comment__create_inline_comment"

@@ -29,6 +29,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      # `/security-review` は origin/HEAD... の差分を取る。CI の checkout では
+      # origin/HEAD が無いことがあるので、PR の base を指すよう先に立てる。
+      - name: Point origin/HEAD at PR base
+        run: |
+          base="${{ github.event.pull_request.base.ref }}"
+          git fetch --no-tags origin "refs/heads/${base}:refs/remotes/origin/${base}"
+          git symbolic-ref refs/remotes/origin/HEAD "refs/remotes/origin/${base}"
+          git rev-parse --verify origin/HEAD
+          git rev-parse --abbrev-ref origin/HEAD
+
       - name: Security review
         uses: anthropics/claude-code-action@v1
         with:
@@ -38,12 +48,12 @@ jobs:
             Review pull request ${{ github.repository }}#${{ github.event.pull_request.number }} for security issues by running the `/security-review` skill.
 
             The PR URL is ${{ github.event.pull_request.html_url }}.
-            Base the review on `git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }}` (changes introduced by this PR only).
+            `origin/HEAD` already points at the PR base (`origin/${{ github.event.pull_request.base.ref }}`), so `/security-review`'s default `origin/HEAD...` range is this PR's changes. Do not skip the skill; if it fails, report the error in the summary comment and exit without a hand-rolled substitute.
 
             - If `SECURITY_REVIEW.md` exists at the repository root, read it and apply it as extra guidance (focus areas and exclusions). If it does not exist, skip this.
             - Post each HIGH or MEDIUM finding as an inline review comment on the relevant changed line. Start each inline comment with **Security**.
             - Read the existing review comments on the PR (`gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`) and do not post a finding that is already there.
             - Do not fix the code. Report only.
-            - When you are done, post one short summary comment with `gh pr comment`, even when there are no findings. Say clearly whether `/security-review` ran and how many findings you posted.
+            - When you are done, post one short summary comment with `gh pr comment`, even when there are no findings. Say clearly that `/security-review` ran and how many findings you posted.
           claude_args: >-
             --allowedTools "Skill,Agent,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(git remote:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*),mcp__github_inline_comment__create_inline_comment"

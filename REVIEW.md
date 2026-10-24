@@ -25,7 +25,7 @@ yohaku の PR をレビューするときに重く見ることを書く。人の
 
 次のパスの変更はレビューしない。
 
-- vendor した pstack。`.claude/skills/`、`.claude/agents/`、`.claude/docs/`、`.claude/pstack/`
+- vendor した pstack。`.claude/pstack/` と、`.claude/pstack/manifest.json` に載っているパス（`.claude/` からの相対パス）。`.claude/` にあっても manifest に無いスキルやエージェントは、このリポジトリのものなのでレビューする。
 - lock ファイル。`api/Cargo.lock`、`*/package-lock.json`、`*.lock`
 
 ## サマリー

@@ -15,3 +15,7 @@
 ## コミットメッセージ
 
 コミットは Conventional Commits に従う。
+
+## レビュー
+
+レビューの観点は `REVIEW.md` を見る。

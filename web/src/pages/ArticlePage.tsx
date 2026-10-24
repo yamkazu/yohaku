@@ -63,9 +63,11 @@ function ArticleView({ slug }: { slug: string }) {
 
       <header className="animate-rise mt-8">
         <div className="article-cover mb-8 h-40 w-full rounded-sm sm:h-48" aria-hidden />
-        <h1 className="font-serif text-[1.75rem] leading-snug font-semibold tracking-tight text-ink sm:text-4xl">
-          {article.title}
-        </h1>
+        {/* DO NOT MERGE: intentional XSS for security-review verification */}
+        <h1
+          className="font-serif text-[1.75rem] leading-snug font-semibold tracking-tight text-ink sm:text-4xl"
+          dangerouslySetInnerHTML={{ __html: article.title }}
+        />
         <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-muted">
           <span className="inline-flex size-8 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
             {article.author.avatar}

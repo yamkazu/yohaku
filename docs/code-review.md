@@ -38,3 +38,19 @@ Claude には、指摘が無くても最後に要約コメントを1つ書かせ
 指摘と修正が往復して止まらないのは、修正を重ねるより、やり方を人が見直すべき合図です。
 
 もう一度レビューを回したいときは、PR の印付きコメントを消します。消した分だけラウンドが戻ります。
+
+## セキュリティレビュー
+
+同じリポジトリのブランチから出た PR には、`.github/workflows/claude-security-review.yml` が Claude の `/security-review` を付けます。draft でも動きます。fork からの PR では動きません。認証はコードレビューと同じ `CLAUDE_CODE_OAUTH_TOKEN` です。API キーベースの `claude-code-security-review` は使いません。
+
+観点と除外はリポジトリ直下の `SECURITY_REVIEW.md` です。ローカルで `/security-review` を回すときも、同じファイルを読んでください。
+
+指摘は行コメントで、先頭に **Security** が付きます。必須チェックにはしていません。
+
+### 誤検知の閉じ方
+
+セキュリティレビューの指摘が誤検知なら、直さずに通すと決めたときと同じく、**理由を返信してから**スレッドを resolve します。理由のない resolve は残しません。後から見ても、なぜ通したかが分かるようにします。
+
+## CodeQL
+
+`.github/workflows/codeql.yml` が TypeScript（`web/`・`e2e/`・`infra/`）と Rust（`api/`）を code scanning します。結果はリポジトリの Security タブに出ます。必須チェックにはしていません。アラートを直すか、理由を付けて dismiss するかは人が決めます。

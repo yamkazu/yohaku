@@ -32,10 +32,18 @@ jobs:
       # `/security-review` は origin/HEAD... の差分を取る。CI の checkout では
       # origin/HEAD が無いことがあるので、PR の base を指すよう先に立てる。
       - name: Point origin/HEAD at PR base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          base="${{ github.event.pull_request.base.ref }}"
-          git fetch --no-tags origin "refs/heads/${base}:refs/remotes/origin/${base}"
-          git symbolic-ref refs/remotes/origin/HEAD "refs/remotes/origin/${base}"
+          # BASE_REF は env 経由（shell への直接展開を避ける）。fork は job の if で除外済み。
+          case "$BASE_REF" in
+            ''|*/*|*..*|*[\ \$\'\"\`]*)
+              echo "refused BASE_REF=$BASE_REF" >&2
+              exit 1
+              ;;
+          esac
+          git fetch --no-tags origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git symbolic-ref refs/remotes/origin/HEAD "refs/remotes/origin/${BASE_REF}"
           git rev-parse --verify origin/HEAD
           git rev-parse --abbrev-ref origin/HEAD
 

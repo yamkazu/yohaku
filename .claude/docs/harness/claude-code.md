@@ -41,7 +41,7 @@ In this repository pstack is vendored into `.claude/` by `scripts/sync-pstack.mj
 
 ## setup-pstack
 
-Claude Code loads every `.md` file in `~/.claude/rules/` into each new session, so `setup-pstack` writes its rule there. Follow its steps with these changes:
+Claude Code loads every `.md` file in `.claude/rules/` at the repository root into each new session, so `setup-pstack` writes its rule there. Follow its steps with these changes:
 
 - Detect. The detected models are the `model` values that the `Agent` tool schema lists, each with an effort from its `effort` values. Write a real model as `<model> <effort>`, such as `opus xhigh`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh` is `opus xhigh`, and `grok-4.7-xhigh-fast` is `inherit-parent`.

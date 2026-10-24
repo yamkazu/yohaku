@@ -1,5 +1,7 @@
 # pstack
 
+> In this repository pstack is vendored into `.claude/` by `scripts/sync-pstack.mjs`, not installed as a plugin. `<pstack>` is `.claude/` at the repository root: skills are in `.claude/skills/`, agents in `.claude/agents/`, and the README in `.claude/pstack/README.md`. Commands and agents have no `pstack:` prefix, so `/poteto-mode`, `poteto-agent`, and `comment-sicko` keep their Cursor names. The plugin install steps below do not apply here. See [SOURCE.md](SOURCE.md).
+
 i'm [poteto](https://x.com/poteto). i'm not a president or ceo, but i've worked with millions of lines of code at Meta, Netflix, and Cursor. i'm also on the react core team where i help build and maintain react compiler.
 
 there's a growing sense that ai writes too much slop code. i agree. i don't want to ship like a team of twenty slop artists. throughput without quality is not a goal i aspire to. if you want to go fast, go deep first. 
@@ -27,7 +29,7 @@ in claude code:
 
 claude code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. to turn it on, run `/plugin`, open the **marketplaces** tab, select `cursor-plugins`, and choose **enable auto-update**. to update once by hand, run `claude plugin update pstack@cursor-plugins`.
 
-claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack:poteto-mode`. the [claude code adapter](../docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack:setup-pstack` writes your model choices to `~/.claude/rules/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
+in this repository commands and agents keep their names, such as `/poteto-mode`. the [claude code adapter](../docs/harness/claude-code.md) maps every other cursor name. in claude code, `/setup-pstack` writes your model choices to `.claude/rules/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
 
 claude code installs a generated copy of pstack, including this readme and the guide, from [`harness/pstack/`](https://github.com/cursor/plugins/tree/main/harness/pstack) at the repository root. after you change pstack, run `node scripts/generate-pstack-harness-trees.mjs` from the repository root and commit the result. ci fails while the generated copy is out of date.
 

@@ -44,6 +44,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
+          # Agent が push した PR でも回す（actor は cursor[bot]）
+          allowed_bots: cursor
           prompt: |
             Review pull request ${{ github.repository }}#${{ github.event.pull_request.number }} for security issues by running the `/security-review` skill.
 

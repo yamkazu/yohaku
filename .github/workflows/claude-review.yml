@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MAX_ROUNDS: "1"
+  MAX_ROUNDS: "3"
 
 jobs:
   review:

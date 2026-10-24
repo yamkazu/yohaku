@@ -92,3 +92,10 @@ jobs:
           fi
           gh pr comment "$PR" --body "<!-- claude-review round=${ROUND} sha=${HEAD_SHA} -->
           Claude レビュー ${ROUND}/${MAX_ROUNDS} ラウンド目を ${HEAD_SHA:0:7} まで済ませました。次の push では、ここからの差分だけを見ます。"
+
+      - name: Fail on unresolved Important
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash scripts/ci/review-important.sh

@@ -6,6 +6,12 @@
 
 認証は Secret `CLAUDE_CODE_OAUTH_TOKEN` です。`claude setup-token` で発行するサブスクのトークンで、API の従量課金は使いません。トークンが切れたらレビューの job が失敗するので、発行し直して Secret を上書きします。
 
+## Important が残っていたら失敗する
+
+Claude が付けた **Important** の行コメントのうち、未解決のスレッドが1つでも残っていると、`Claude review` の job が失敗します（`scripts/ci/review-important.sh`）。直したらスレッドを resolve し、次の push で緑に戻ります。resolve だけでは workflow が走らないので、push のない resolve で緑にしたいときは job を re-run します。
+
+直さずに通すと決めた指摘も、理由を返信してから resolve します。上限に達した後の push でもこの判定は毎回走ります。必須チェックにするかはルールセットの話で、ここでは決めていません。
+
 ## ラウンドの数え方
 
 push のたびにレビューが1回走り、1回を1ラウンドと数えます。上限は workflow の `MAX_ROUNDS`（今は3）です。
